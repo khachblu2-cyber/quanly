@@ -1,7 +1,7 @@
 <!--
 ================================================================================
   BÀN GIAO — APP CÂN TÔM (Tính tiền công nhật)
-  Phiên bản: V1.13.3    Cập nhật: 04/09/2026
+  Phiên bản: V1.13.4    Cập nhật: 04/09/2026
 --------------------------------------------------------------------------------
   TÀI LIỆU NÀY NẰM NGAY TRONG FILE, KHÔNG BAO GIỜ LỆCH VỚI CODE.
   Mỗi lần sửa file BẮT BUỘC cập nhật luôn phần này (số phiên bản + dòng
@@ -518,6 +518,33 @@
            ra số giống hệt); div 546/546; onclick đủ; công thức tính tiền diff
            ra giống hệt; bài thử xoá hàng loạt vẫn 0 lệnh xoá.
 
+  V1.13.4  VÁ LỖI V1.13.3 KHÔNG CẮT ĐƯỢC TẢI. Chỉ đụng phần KHỞI ĐỘNG.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           TRIỆU CHỨNG: đưa V1.13.3 lên, header vẫn hiện 74.778 phiếu —
+           không cắt gì cả.
+
+           GỐC BỆNH: listener weighings gắn TRƯỚC khi bản tháng về, lúc đó
+           mocTaiPhieu() trả null nên tải đủ. Và vì đã bỏ cơ chế gắn lại
+           listener (do bỏ công tắc) nên nó KHÔNG BAO GIỜ cắt.
+           Ghi chú V1.13.3 nói "lần mở sau có bộ nhớ đệm nên cắt được ngay"
+           là SAI — bộ nhớ đệm không làm dữ liệu có mặt ĐỒNG BỘ lúc gắn
+           listener, nó vẫn về sau.
+
+           ĐÃ VÁ — hai chỗ, đều trong phần khởi động:
+             (a) cloudInit: đọc monthlySummary bằng .get({source:'server'})
+                 và CHỜ xong (tối đa 8 giây) TRƯỚC khi gắn listener. Nhờ vậy
+                 mốc cắt tải đúng ngay lần đầu, không phải gắn lại listener
+                 giữa chừng — tránh đúng lỗi C của V1.14.x.
+                 Quá hạn/lỗi/kho rỗng -> banThangDaTai vẫn false -> tải đủ
+                 như cũ. Thà chậm còn hơn sai.
+             (b) listener monthlySummary nay CHỈ cập nhật số liệu (khi Cloud
+                 Function tính lại sau baoTinhLai hoặc lúc chốt 12h/22h),
+                 KHÔNG đổi quyết định cắt tải giữa phiên, và bỏ qua gói rỗng
+                 để không xoá mất bản tháng đã lấy được ở cloudInit.
+
+           Tốn thêm ~340 lượt đọc cho lần .get(), không đáng kể.
+
 ================================================================================
   HẾT PHẦN BÀN GIAO
 ================================================================================
@@ -930,7 +957,7 @@
   <div class="brand-row">
     <div class="brand">
       <div class="brand-title">⚖️ Cân Tôm</div>
-      <div class="brand-status"><span class="ver-badge">V1.13.3</span> · <span id="cloudStatus"></span></div>
+      <div class="brand-status"><span class="ver-badge">V1.13.4</span> · <span id="cloudStatus"></span></div>
     </div>
     <div id="currentUserBar" class="hidden brand-user">
       <span>👤 <span id="currentUserNameLabel"></span></span>
@@ -5916,17 +5943,20 @@ function attachRealtimeListeners(){
      tháng mất kết nối).
      Lần mở đầu tiên bản tháng chưa về nên tải phiếu đầy đủ — đúng và an toàn.
      Lần mở sau đã có bộ nhớ đệm nên cắt được ngay. */
+  /* V1.13.4 — LISTENER BẢN THÁNG chỉ để CẬP NHẬT khi Cloud Function tính lại
+     (sau baoTinhLai, hoặc lúc chốt 12h/22h). Quyết định "có cắt tải hay không"
+     đã chốt ở cloudInit bằng .get(), listener KHÔNG được đổi quyết định đó
+     giữa phiên — đổi giữa chừng là phải gắn lại listener, đúng lỗi C của
+     V1.14.x. Muốn đổi thì tải lại trang. */
   const unsubBanThang = fsDb.collection('monthlySummary').onSnapshot(qs=>{
-    banThang = qs.docs.map(d=>d.data());
-    if(qs.metadata && qs.metadata.fromCache === false) banThangDaTai = true;
-    if(banThangDaTai && !banThang.length){
-      batLuoiAnToan('Kho bản tổng hợp RỖNG — Cloud Function chưa chạy?');
-      return;
-    }
-    renderSoon();
+    const ds = qs.docs.map(d=>d.data());
+    // Chỉ nhận khi có dữ liệu. Gói rỗng (thường là cache lúc mới mở) bỏ qua,
+    // không được để nó xoá mất bản tháng đã lấy được ở cloudInit.
+    if(ds.length){ banThang = ds; renderSoon(); }
   }, err=>{
-    console.error('Lỗi đọc bản tổng hợp', err);
-    batLuoiAnToan('Không đọc được bản tổng hợp: ' + (err && err.code || err));
+    console.warn('Lỗi theo dõi bản tổng hợp:', err && (err.code || err.message));
+    // KHÔNG bật lưới an toàn ở đây: dữ liệu đã lấy được từ .get() vẫn dùng tốt,
+    // mất kết nối chỉ nghĩa là không nhận được cập nhật mới.
   });
   firestoreListeners.push(unsubBanThang);
 
@@ -6037,6 +6067,37 @@ async function cloudInit(){
     // Bộ lắng nghe bên dưới sẽ mang bản chuẩn từ server về ngay sau đó.
     lastSynced = { companyInfo: deepCopy(companyInfo), appOptions: deepCopy(appOptions) };
     Object.keys(COLLECTIONS).forEach(n=>{ lastSynced[n] = deepCopy(COLLECTIONS[n]()); });
+
+    /* V1.13.4 — LẤY BẢN THÁNG TRƯỚC KHI GẮN LISTENER.
+       GỐC BỆNH của V1.13.3: listener weighings gắn TRƯỚC, lúc đó bản tháng
+       chưa về nên mocTaiPhieu() trả null -> tải đủ 74.778 phiếu. Và vì đã
+       bỏ cơ chế gắn lại listener (bỏ công tắc) nên nó KHÔNG BAO GIỜ cắt.
+       Ghi chú V1.13.3 nói "lần mở sau có bộ nhớ đệm nên cắt được ngay" là
+       SAI: bộ nhớ đệm không làm dữ liệu có mặt ĐỒNG BỘ lúc gắn listener.
+
+       Nay đọc một lần bằng .get() và CHỜ xong, rồi mới gắn listener với mốc
+       ĐÚNG NGAY LẦN ĐẦU. Không gắn lại giữa chừng -> tránh đúng lỗi C của
+       V1.14.x (listener không được gắn lại nên tính năng coi như không chạy).
+
+       Quá hạn hoặc lỗi -> banThangDaTai vẫn false -> tải đủ như cũ. Thà chậm
+       còn hơn sai. Tốn thêm ~340 lượt đọc, không đáng kể. */
+    try{
+      const snapBT = await gioiHanThoiGian(
+        fsDb.collection('monthlySummary').get({ source: 'server' }), 8000, 'tải bản tổng hợp');
+      if(snapBT){
+        banThang = snapBT.docs.map(d=>d.data());
+        if(banThang.length){
+          banThangDaTai = true;
+          console.log('Bản tổng hợp: ' + banThang.length + ' bản ghi — cắt tải phiếu gốc từ ' + ngayHomNayKey());
+        }else{
+          banThangLoi = 'Kho bản tổng hợp RỖNG — Cloud Function chưa chạy?';
+          console.warn(banThangLoi);
+        }
+      }
+    }catch(e){
+      banThangLoi = 'Không tải được bản tổng hợp: ' + ((e && e.message) || e);
+      console.warn(banThangLoi + ' — tải đủ phiếu gốc như cũ.');
+    }
 
     fsReady = true;
     renderEverything();
