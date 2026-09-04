@@ -1,7 +1,7 @@
 <!--
 ================================================================================
   BÀN GIAO — APP CÂN TÔM (Tính tiền công nhật)
-  Phiên bản: V1.13.2    Cập nhật: 29/08/2026
+  Phiên bản: V1.13.3    Cập nhật: 04/09/2026
 --------------------------------------------------------------------------------
   TÀI LIỆU NÀY NẰM NGAY TRONG FILE, KHÔNG BAO GIỜ LỆCH VỚI CODE.
   Mỗi lần sửa file BẮT BUỘC cập nhật luôn phần này (số phiên bản + dòng
@@ -467,6 +467,57 @@
            Sửa luôn dòng tiêu đề bàn giao: trước ghi "V1.11.8" trong khi
            file đã là V1.13.0 — sai từ lâu, nay ghi đúng.
 
+  V1.13.3  CÔNG NỢ ĐỌC BẢN TỔNG HỢP — mỗi lần mở /quanly/ còn ~3.000 lượt
+           đọc thay vì 74.742, và ĐỨNG YÊN MÃI dù kho lên 1 triệu phiếu.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           ĐÃ CHỨNG MINH TRƯỚC KHI LÀM: hàm doiChieu trên server so bản tổng
+           hợp với phiếu gốc TỪNG NGƯỜI TỪNG NGÀY. Năm lần chạy (27 ngày /
+           58.974 phiếu, rồi 4 lần 6-7 ngày) đều KHỚP TUYỆT ĐỐI, chênh 0 đồng.
+
+           CÁCH LÀM: ngày CŨ lấy tiền công từ kho monthlySummary (~340 bản
+           ghi, có sẵn cacNgay:{dateKey:tiền} đúng bằng cấu trúc cần dùng).
+           Ngày HÔM NAY vẫn đọc phiếu gốc, vì Cloud Function chỉ chốt lúc 12h
+           và 22h nên bản tổng hợp của ngày đang diễn ra luôn cũ.
+
+           BỐN NHÁNH ANH EM phải sửa (vá một chỗ KHÔNG đủ):
+             1. dungBangTraCuu   — hàm nền, 4 hàm đi qua
+             2. tienCongTheoNgay — TƯỞNG đi qua hàm nền nhưng đọc THẲNG
+                weighings. Là nền của tongTienCong -> totalEarnedAllTime ->
+                payableBalance/balanceAsOf. BÀI THỬ JSDOM BẮT ĐƯỢC: quên sửa
+                thì số dư chỉ còn tiền HÔM NAY — 200.000 thay vì 4.275.000,
+                hụt hơn 4 triệu MỘT NGƯỜI. Đây đúng là lỗi đã làm phiếu in
+                thiếu 7 triệu ở V1.14.x.
+             3. employeeDailyEarnings — cạm bẫy sâu hai tầng: lấy danh sách
+                ngày từ bản tháng chưa đủ, vì tienCongNgay() cũng đọc thẳng
+                weighings nên ngày cũ ra 0đ. Phải lấy CẢ SỐ TIỀN từ bảng nền.
+             4. buildReceiptHtml — phiếu in đưa TẬN TAY công nhân. Bản tháng
+                chỉ có tổng tiền theo ngày, KHÔNG có chi tiết mã hàng. Ngày
+                ngoài phạm vi -> trả null, hai nơi gọi báo rõ và KHÔNG in.
+                Thà không có giấy còn hơn giấy sai.
+
+           CẠM BẪY TIỀN CƠM: tiền trong bản tháng ĐÃ GỒM tiền cơm tăng ca.
+           Không được tạo "phiếu giả" rồi cho chạy tiếp nhánh tính cơm — sẽ
+           cộng thêm 10% lần nữa. Phải lấy thẳng số đã tính.
+
+           KHÔNG CÓ CÔNG TẮC (anh Tinh chọn). Đường lùi: upload lại V1.13.2.
+           Bỏ công tắc cũng bỏ luôn cơ chế gắn lại listener giữa chừng —
+           chính là hai lỗi đã làm hỏng V1.14.x.
+
+           LƯỚI AN TOÀN — ba cửa, thiếu một cửa là quay về phiếu gốc:
+             (a) chưa nhận gói monthlySummary TỪ SERVER
+             (b) kho monthlySummary rỗng
+             (c) lỗi đọc -> batLuoiAnToan() gắn lại listener, tải đủ như cũ
+           Tab Công nợ luôn hiện một dòng cho biết đang dùng nguồn nào.
+           KHÔNG BAO GIỜ hiện số sai âm thầm.
+
+           baoTinhLai(): sửa/xoá phiếu hoặc đổi ngày tăng ca của ngày CŨ thì
+           ghi dấu vào kho capNhatCho, Cloud Function tính lại trong 5-10 giây.
+
+           KIỂM TRA: jsdom 31/31 đạt (gồm phép so TỪNG HÀM với V1.13.2 phải
+           ra số giống hệt); div 546/546; onclick đủ; công thức tính tiền diff
+           ra giống hệt; bài thử xoá hàng loạt vẫn 0 lệnh xoá.
+
 ================================================================================
   HẾT PHẦN BÀN GIAO
 ================================================================================
@@ -879,7 +930,7 @@
   <div class="brand-row">
     <div class="brand">
       <div class="brand-title">⚖️ Cân Tôm</div>
-      <div class="brand-status"><span class="ver-badge">V1.13.2</span> · <span id="cloudStatus"></span></div>
+      <div class="brand-status"><span class="ver-badge">V1.13.3</span> · <span id="cloudStatus"></span></div>
     </div>
     <div id="currentUserBar" class="hidden brand-user">
       <span>👤 <span id="currentUserNameLabel"></span></span>
@@ -1903,6 +1954,10 @@ function locLichSuCan(){
   const t = (document.getElementById('lscTo')?.value)||'';
   const u = (document.getElementById('lscUser')?.value)||'';
   const q = ((document.getElementById('lscSearch')?.value)||'').toLowerCase().trim();
+  /* V1.13.3 — NHÁNH ANH EM số 3.
+     Hàm này chỉ HIỂN THỊ lịch sử cân, không tính tiền, nên thiếu dữ liệu
+     không làm sai tiền. Nhưng vẫn phải báo rõ để người xem không tưởng là
+     "ngày đó không ai cân". Phần báo nằm ở renderLichSuCan. */
   return weighings.filter(w=>{
     if(f && w.dateKey < f) return false;
     if(t && w.dateKey > t) return false;
@@ -3672,6 +3727,7 @@ function isOvertimeDay(employeeId, dateKey){
   return overtimeDays.some(o=>o.employeeId===employeeId && o.dateKey===dateKey);
 }
 function toggleOvertimeDay(employeeId, dateKey){
+  baoTinhLai(dateKey);   // V1.13.3 — đổi ngày tăng ca là đổi tiền cơm
   const idx = overtimeDays.findIndex(o=>o.employeeId===employeeId && o.dateKey===dateKey);
   if(idx>=0){
     const bo = overtimeDays[idx];
@@ -3699,6 +3755,30 @@ function tienCongNgay(employeeId, dateKey){
 }
 // Gom theo ngày một lần rồi tính — không quét lại toàn bộ phiếu cân cho mỗi ngày
 function tienCongTheoNgay(locPhieu){
+  /* V1.13.3 — NHÁNH ANH EM số 4, TÌM RA NHỜ BÀI THỬ JSDOM.
+     Hàm này TƯỞNG đi qua dungBangTraCuu nhưng thực ra đọc THẲNG weighings.
+     Nó là nền của tongTienCong -> totalEarnedAllTime -> payableBalance và
+     balanceAsOf. Cắt tải mà không sửa đây thì số dư chỉ còn tiền HÔM NAY:
+     bài thử ra 200.000 thay vì 4.275.000 — hụt hơn 4 triệu một người.
+
+     CẠM BẪY: không được tạo "phiếu giả" từ bản tháng rồi cho chạy tiếp nhánh
+     bên dưới, vì tiền trong bản tháng ĐÃ GỒM tiền cơm — chạy lại sẽ cộng
+     thêm 10% lần nữa. Phải lấy thẳng số đã tính từ bảng nền.
+
+     locPhieu ở cả 5 chỗ gọi chỉ dùng employeeId và dateKey, nên áp được
+     lên object rút gọn. */
+  if(dungDuocBanThang()){
+    const bang = dungBangTraCuu().thoTheoNgay;
+    const ketQua = {};
+    Object.keys(bang).forEach(eid=>{
+      Object.keys(bang[eid]).forEach(dk=>{
+        if(!locPhieu({ employeeId: eid, dateKey: dk })) return;
+        ketQua[dk] = (ketQua[dk] || 0) + bang[eid][dk];
+      });
+    });
+    return ketQua;
+  }
+
   const theoNguoiNgay = {};
   weighings.forEach(w=>{
     if(!locPhieu(w)) return;
@@ -3726,14 +3806,34 @@ function dungBangTraCuu(){
   const ngayTangCa = new Set(overtimeDays.map(o=>o.employeeId + '|' + o.dateKey));
 
   // { employeeId: { dateKey: tiền công ĐÃ làm tròn } }
-  const thoTheoNgay = {};
+  let thoTheoNgay = {};
+
+  /* V1.13.3 — CHẶN Ở TẦNG DỮ LIỆU.
+     Sáu hàm tính tiền đều đi qua đây (tienCongTheoNgay, tongTienCong,
+     totalEarnedAllTime, payableBalance, balanceAsOf, buildDebtBalanceData).
+     Sửa một chỗ này thì cả sáu tự đúng — KHÔNG vá từng hàm, vì vá từng hàm
+     đã bỏ sót ba nhánh anh em và làm phiếu in thiếu 7 triệu ở V1.14.x. */
+  const dungBanThang = dungDuocBanThang();
+  const homNay = ngayHomNayKey();
+
+  if(dungBanThang){
+    // Ngày CŨ: lấy thẳng từ bản tháng (Cloud Function đã tính, đã đối chiếu khớp)
+    thoTheoNgay = thoTheoNgayTuBanThang();
+    // Bỏ ngày hôm nay ra khỏi bản tháng — bản tổng hợp của ngày đang diễn ra
+    // luôn cũ (chốt 12h và 22h), phải tính lại từ phiếu gốc bên dưới.
+    Object.keys(thoTheoNgay).forEach(eid=>{ delete thoTheoNgay[eid][homNay]; });
+  }
+
+  // Ngày HÔM NAY (và mọi ngày khi không dùng bản tháng): tính từ phiếu gốc.
+  // Công thức giữ NGUYÊN VĂN, không rút gọn.
   const cong = {};
   weighings.forEach(w=>{
+    if(dungBanThang && w.dateKey !== homNay) return;   // ngày cũ đã có ở trên
     if(!cong[w.employeeId]) cong[w.employeeId] = {};
     cong[w.employeeId][w.dateKey] = (cong[w.employeeId][w.dateKey] || 0) + w.amount;
   });
   Object.keys(cong).forEach(eid=>{
-    thoTheoNgay[eid] = {};
+    if(!thoTheoNgay[eid]) thoTheoNgay[eid] = {};
     Object.keys(cong[eid]).forEach(dk=>{
       const base = cong[eid][dk];
       const bonus = ngayTangCa.has(eid + '|' + dk) ? Math.round(base * 0.1) : 0;
@@ -4249,6 +4349,7 @@ function saveEditWeigh(id){
   w.amount = newKg * w.unitPrice;
   editingWeighId = null;
   ghiNgay('weighings', w);
+  baoTinhLai(w.dateKey);   // V1.13.3 — sửa kg là đổi tiền, báo server tính lại
   saveAll(true);   // da goi ghiNgay/xoaNgay roi, khong can quet lai 7 kho
   renderWeighTab();
 }
@@ -4265,6 +4366,7 @@ function deleteSingleWeigh(id){
   if(!can('weighDelete')){ alert("Tài khoản của bạn không có quyền xoá phiếu cân"); return; }
   if(pendingDeleteKey === ('single:'+id)){
     const w = weighings.find(x=>x.id===id);
+    if(w) baoTinhLai(w.dateKey);   // V1.13.3 — báo server tính lại ngày đó
     if(w){
       const em = employees.find(e=>e.id===w.employeeId);
       const pr = products.find(x=>x.id===w.productId);
@@ -4385,6 +4487,17 @@ function paidDateKeysOf(employeeId){
 }
 function employeeDailyEarnings(employeeId){
   const today = todayKey();
+  /* V1.13.3 — NHÁNH ANH EM số 1.
+     Hàm này KHÔNG đi qua dungBangTraCuu, nó tự lọc weighings.
+     Cạm bẫy sâu hơn một tầng: tienCongNgay() cũng đọc thẳng weighings, nên
+     nếu chỉ lấy DANH SÁCH NGÀY từ bản tháng mà vẫn gọi tienCongNgay() thì
+     ngày cũ ra 0 ĐỒNG. Phải lấy CẢ SỐ TIỀN từ bảng tra cứu. */
+  if(dungDuocBanThang()){
+    const bang = dungBangTraCuu().thoTheoNgay[String(employeeId)] || {};
+    return Object.keys(bang).filter(dk=>dk<today)
+      .map(dk=>({ dateKey: dk, amount: bang[dk] }))
+      .sort((a,b)=> b.dateKey.localeCompare(a.dateKey));
+  }
   const dateKeys = [...new Set(weighings.filter(w=>w.employeeId===employeeId).map(w=>w.dateKey))].filter(dk=>dk<today);
   return dateKeys.map(dk=>{
     return { dateKey: dk, amount: tienCongNgay(employeeId, dk) };
@@ -4668,9 +4781,67 @@ function totalPaid(employeeId){
 function payableBalance(employeeId){
   return totalOpeningBalance(employeeId) + totalEarnedAllTime(employeeId) - totalPaid(employeeId);
 }
+/* V1.13.3 — BÁO SERVER TÍNH LẠI NGAY khi sửa/xoá dữ liệu ngày CŨ.
+   Ghi một dấu vào kho capNhatCho; Cloud Function tinhLaiTheoYeuCau (đã deploy
+   21/08) bắt được và tính lại ngày đó trong 5-10 giây, rồi tự xoá dấu.
+   Không gọi cho ngày hôm nay: hôm nay vốn đã đọc phiếu gốc, gọi là vô ích. */
+function baoTinhLai(dateKey){
+  if(!dateKey || dateKey === ngayHomNayKey()) return;
+  if(!fsReady || !fsDb) return;
+  try{
+    fsDb.collection('capNhatCho').doc('yc_' + dateKey + '_' + Date.now())
+        .set({ dateKey: dateKey, luc: Date.now() })
+        .catch(e=>console.warn('Không gửi được yêu cầu tính lại:', e && e.message));
+  }catch(e){ console.warn('baoTinhLai:', e && e.message); }
+}
+
 function renderDebtTab(){
+  veCanhBaoNguonDuLieu();
   renderOpeningList();
   renderPaymentList();
+}
+
+/* V1.13.3 — BẢNG ĐỎ khi lưới an toàn bật.
+   Nguyên tắc: KHÔNG BAO GIỜ hiện số sai âm thầm. Hoặc số đúng, hoặc báo đỏ. */
+function veCanhBaoNguonDuLieu(){
+  const id = 'canhBaoNguonDL';
+  let el = document.getElementById(id);
+  const tab = document.getElementById('debtTab');
+  if(!tab) return;
+  if(!el){
+    el = document.createElement('div');
+    el.id = id;
+    el.style.cssText = 'margin:10px 0;padding:11px 13px;border-radius:8px;'
+      + 'font-size:14px;line-height:1.5;display:none;';
+    tab.insertBefore(el, tab.firstChild);
+  }
+  if(dungPhieuGocToanBo){
+    el.style.display = '';
+    el.style.background = '#FDECEA';
+    el.style.border = '1px solid #F2B8B5';
+    el.style.color = '#8C1D18';
+    el.innerHTML = '⚠️ <b>KHÔNG DÙNG ĐƯỢC BẢN TỔNG HỢP</b><br>'
+      + 'App đã tự quay về tính từ phiếu gốc. <b>Số vẫn đúng</b>, chỉ chậm hơn.<br>'
+      + '<span style="font-size:12.5px;opacity:.85">Lý do: '
+      + (banThangLoi || 'không rõ') + '</span>';
+  }else if(dungDuocBanThang()){
+    el.style.display = '';
+    el.style.background = '#E8F5EC';
+    el.style.border = '1px solid #A8D5B8';
+    el.style.color = '#1B5E31';
+    el.innerHTML = '✓ Đang dùng <b>bản tổng hợp</b> cho ngày cũ · '
+      + banThang.length.toLocaleString('en-US') + ' bản ghi · '
+      + 'hôm nay tính từ phiếu gốc ('
+      + weighings.length.toLocaleString('en-US') + ' phiếu)';
+  }else{
+    el.style.display = '';
+    el.style.background = '#FFF8E8';
+    el.style.border = '1px solid #E1D5BC';
+    el.style.color = '#5a4a28';
+    el.innerHTML = '⏳ Đang tính từ <b>phiếu gốc</b> ('
+      + weighings.length.toLocaleString('en-US') + ' phiếu) — '
+      + 'bản tổng hợp chưa về. Số đúng, chỉ chậm.';
+  }
 }
 function prevDateKey(dateKey){
   const d = new Date(dateKey+"T00:00:00");
@@ -4989,6 +5160,16 @@ function renderSettlement(){
 // ===== PRINT RECEIPT =====
 function buildReceiptHtml(empId, dateKey){
   const emp = employees.find(e=>e.id===empId);
+  /* V1.13.3 — NHÁNH ANH EM số 2, NGUY HIỂM NHẤT.
+     Đây là tờ giấy đưa TẬN TAY công nhân. Người nhận tin tờ giấy, không tin
+     màn hình. Ở V1.14.x hàm này in thiếu 7 triệu vì đọc phiếu gốc đã bị cắt.
+     Phần CHI TIẾT từng mã hàng BẮT BUỘC cần phiếu gốc — bản tháng chỉ có
+     tổng tiền theo ngày, không có chi tiết.
+     Nay: ngày ngoài phạm vi đã tải thì TRẢ VỀ null, KHÔNG in tờ thiếu.
+     Thà không có giấy còn hơn giấy sai. */
+  if(!coPhieuGocChoNgay(dateKey)){
+    return null;
+  }
   const rows = weighings.filter(w=>w.employeeId===empId && w.dateKey===dateKey);
   const byProduct = {};
   rows.forEach(w=>{
@@ -5036,7 +5217,18 @@ function buildReceiptHtml(empId, dateKey){
   `;
 }
 function printReceipt(empId, dateKey){
-  document.getElementById('printArea').innerHTML = buildReceiptHtml(empId, dateKey);
+  /* V1.13.3 — buildReceiptHtml trả null khi ngày nằm ngoài phạm vi phiếu gốc
+     đã tải. Phải chặn ở đây, nếu không innerHTML = null sẽ in ra tờ giấy
+     trắng hoặc chữ "null" — tệ hơn là không in. */
+  const html = buildReceiptHtml(empId, dateKey);
+  if(!html){
+    alert("Không in được phiếu ngày " + dateKey + ".\n\n"
+        + "App chỉ tải chi tiết phiếu cân của ngày hôm nay. Ngày cũ chỉ có\n"
+        + "tổng tiền công, không có chi tiết từng mã hàng để in.\n\n"
+        + "Muốn in lại phiếu ngày cũ: dùng bản cân (/cantom/) chọn đúng ngày đó.");
+    return;
+  }
+  document.getElementById('printArea').innerHTML = html;
   window.print();
 }
 function printAllReceipts(){
@@ -5044,7 +5236,15 @@ function printAllReceipts(){
   const dayWeighings = weighings.filter(w=>w.dateKey===dateKey);
   const empIds = [...new Set(dayWeighings.map(w=>w.employeeId))];
   if(empIds.length===0){ alert("Không có phiếu cân nào trong ngày này"); return; }
-  document.getElementById('printArea').innerHTML = empIds.map(id=>buildReceiptHtml(id, dateKey)).join('');
+  // V1.13.3 — bỏ những tờ trả về null thay vì ghép chuỗi "null" vào trang in
+  const cacTo = empIds.map(id=>buildReceiptHtml(id, dateKey)).filter(Boolean);
+  if(!cacTo.length){
+    alert("Không in được phiếu ngày " + dateKey + ".\n\n"
+        + "App chỉ tải chi tiết phiếu cân của ngày hôm nay.\n"
+        + "Muốn in lại phiếu ngày cũ: dùng bản cân (/cantom/) chọn đúng ngày đó.");
+    return;
+  }
+  document.getElementById('printArea').innerHTML = cacTo.join('');
   window.print();
 }
 
@@ -5495,6 +5695,83 @@ function soPhieuHomNay(){
   return n ? (" · " + n.toLocaleString("en-US") + " phiếu") : "";
 }
 
+/* ===========================================================================
+   V1.13.3 — CÔNG NỢ ĐỌC BẢN TỔNG HỢP
+   ---------------------------------------------------------------------------
+   VÌ SAO: mỗi lần mở /quanly/ phải tải TOÀN BỘ kho phiếu (74.742 lúc 04/09,
+   tăng ~2.700/ngày). Một năm nữa ~900.000 phiếu -> mở app mất nhiều phút, và
+   app tự mở cổng sau 31 giây nên sẽ LUÔN vào với dữ liệu chưa đủ.
+
+   CÁCH LÀM: tiền công ngày CŨ lấy từ kho monthlySummary do Cloud Function
+   tính (~340 bản ghi). Ngày HÔM NAY vẫn đọc phiếu gốc, vì Cloud Function chỉ
+   chốt lúc 12h và 22h nên bản tổng hợp của ngày đang diễn ra luôn cũ.
+
+   ĐÃ CHỨNG MINH TRƯỚC KHI LÀM: hàm doiChieu trên server so bản tổng hợp với
+   phiếu gốc từng người từng ngày. Năm lần chạy (27 ngày/58.974 phiếu, rồi
+   4 lần 6-7 ngày) đều KHỚP TUYỆT ĐỐI, chênh 0 đồng.
+
+   KHÔNG CÓ CÔNG TẮC. Anh Tinh chọn bỏ công tắc: đường lùi là upload lại file
+   V1.13.2. Bỏ công tắc cũng bỏ luôn cơ chế gắn lại listener giữa chừng —
+   chính là hai lỗi đã làm hỏng dòng V1.14.x (công tắc lan sang máy khác;
+   listener không gắn lại nên tính năng không chạy).
+   =========================================================================== */
+let banThang = [];              // monthlySummary: mỗi người mỗi tháng 1 bản ghi
+let banThangDaTai = false;      // đã nhận gói TỪ SERVER (không phải bộ nhớ đệm)
+let banThangLoi = '';           // lý do lỗi, để hiện bảng đỏ
+let dungPhieuGocToanBo = false; // true = lưới an toàn bật, quay về cách cũ
+
+/* Ngày hôm nay theo giờ máy, dạng YYYY-MM-DD */
+function ngayHomNayKey(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
+         + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+/* Có dùng được bản tháng không.
+   BA cửa, thiếu một cửa là quay về phiếu gốc — thà chậm còn hơn sai. */
+function dungDuocBanThang(){
+  if(dungPhieuGocToanBo) return false;   // lưới an toàn đã bật
+  if(!banThangDaTai) return false;       // chưa nhận gói từ server
+  if(!banThang.length) return false;     // kho rỗng
+  return true;
+}
+
+/* Mốc tải phiếu gốc: chỉ tải TỪ hôm nay trở đi khi dùng được bản tháng.
+   Trả null = tải đầy đủ như cũ. */
+function mocTaiPhieu(){
+  return dungDuocBanThang() ? ngayHomNayKey() : null;
+}
+
+/* Bảng tiền công ngày CŨ lấy từ bản tháng: { employeeId: { dateKey: tiền } }
+   cacNgay trong monthlySummary ĐÚNG bằng cấu trúc này nên ghép thẳng được. */
+function thoTheoNgayTuBanThang(){
+  const ket = {};
+  banThang.forEach(b=>{
+    if(!b || !b.employeeId || !b.cacNgay) return;
+    const eid = String(b.employeeId);
+    if(!ket[eid]) ket[eid] = {};
+    Object.keys(b.cacNgay).forEach(dk=>{ ket[eid][dk] = Number(b.cacNgay[dk]) || 0; });
+  });
+  return ket;
+}
+
+/* Ngày này có nằm trong phạm vi phiếu gốc đã tải không?
+   Dùng cho các hàm CẦN phiếu gốc chi tiết (in phiếu, xem lịch sử cân). */
+function coPhieuGocChoNgay(dateKey){
+  const moc = mocTaiPhieu();
+  return !moc || String(dateKey) >= moc;
+}
+
+/* Bật lưới an toàn: quay về phiếu gốc toàn bộ, tải lại đầy đủ. */
+function batLuoiAnToan(lyDo){
+  if(dungPhieuGocToanBo) return;
+  dungPhieuGocToanBo = true;
+  banThangLoi = lyDo || 'Không rõ nguyên nhân';
+  console.warn('LƯỚI AN TOÀN: quay về phiếu gốc —', banThangLoi);
+  try{ attachRealtimeListeners(); }catch(e){}
+  try{ renderSoon(); }catch(e){}
+}
+
 const COLLECTIONS = {
   employees: () => employees,
   products: () => products,
@@ -5585,7 +5862,15 @@ function attachRealtimeListeners(){
   firestoreListeners = [];
 
   Object.keys(COLLECTIONS).forEach(name=>{
-    const unsub = fsDb.collection(name).onSnapshot(qs=>{
+    /* V1.13.3 — CẮT TẢI PHIẾU GỐC.
+       Chỉ kho weighings mới cắt, các kho khác nhỏ nên tải đủ như cũ.
+       mocTaiPhieu() trả null khi chưa dùng được bản tháng -> không cắt gì. */
+    let truyVan = fsDb.collection(name);
+    if(name === 'weighings'){
+      const moc = mocTaiPhieu();
+      if(moc) truyVan = truyVan.where('dateKey', '>=', moc);
+    }
+    const unsub = truyVan.onSnapshot(qs=>{
       // Server là bản chuẩn — thay thẳng. Firestore đã tự gộp sẵn
       // các bản ghi máy này vừa ghi mà chưa kịp lên server.
       // Server là bản chuẩn — thay thẳng.
@@ -5623,6 +5908,27 @@ function attachRealtimeListeners(){
     });
     firestoreListeners.push(unsub);
   });
+
+  /* V1.13.3 — LISTENER BẢN THÁNG (monthlySummary), ~340 bản ghi.
+     Gắn MỘT LẦN cùng lúc với các listener kia. KHÔNG gắn lại giữa chừng —
+     đó là lỗi C của V1.14.x (bản tháng về sau, không ai gọi gắn lại, tính
+     năng coi như không chạy; tệ hơn là rơi vào trạng thái cắt tải mà bản
+     tháng mất kết nối).
+     Lần mở đầu tiên bản tháng chưa về nên tải phiếu đầy đủ — đúng và an toàn.
+     Lần mở sau đã có bộ nhớ đệm nên cắt được ngay. */
+  const unsubBanThang = fsDb.collection('monthlySummary').onSnapshot(qs=>{
+    banThang = qs.docs.map(d=>d.data());
+    if(qs.metadata && qs.metadata.fromCache === false) banThangDaTai = true;
+    if(banThangDaTai && !banThang.length){
+      batLuoiAnToan('Kho bản tổng hợp RỖNG — Cloud Function chưa chạy?');
+      return;
+    }
+    renderSoon();
+  }, err=>{
+    console.error('Lỗi đọc bản tổng hợp', err);
+    batLuoiAnToan('Không đọc được bản tổng hợp: ' + (err && err.code || err));
+  });
+  firestoreListeners.push(unsubBanThang);
 
   const settingsUnsub = fsDb.collection("settings").doc("app").onSnapshot(doc=>{
     if(doc.exists){
