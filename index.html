@@ -1,7 +1,7 @@
 <!--
 ================================================================================
   BÀN GIAO — APP CÂN TÔM (Tính tiền công nhật)
-  Phiên bản: V1.11.8    Cập nhật: 13/08/2026
+  Phiên bản: V1.13.2    Cập nhật: 29/08/2026
 --------------------------------------------------------------------------------
   TÀI LIỆU NÀY NẰM NGAY TRONG FILE, KHÔNG BAO GIỜ LỆCH VỚI CODE.
   Mỗi lần sửa file BẮT BUỘC cập nhật luôn phần này (số phiên bản + dòng
@@ -429,6 +429,44 @@
              fullBackupExport · fullBackupImport
            Listener KHÔNG có .where() -> tải đầy đủ như cũ, mọi hàm đều đủ dữ liệu.
 
+  V1.13.2  HEADER CHO BIẾT DỮ LIỆU ĐÃ ĐỦ HAY CHƯA. Chỉ đụng phần HIỂN THỊ.
+           (md5 ghi ở BAN-GIAO-TONG-THE — không ghi trong file vì ghi vào
+            thì chính md5 lại đổi, giống cách bản V1.13.0 đã làm)
+
+           GỐC BỆNH (đo được, không phải suy đoán): gói dữ liệu từ BỘ NHỚ ĐỆM
+           (có thể THIẾU phiếu) và gói từ MÁY CHỦ (đủ) đều làm header hiện
+           "☁️ Đã đồng bộ" Y HỆT NHAU. Thử với 71 phiếu: bộ nhớ đệm cho 53
+           phiếu = 5.300.000đ, máy chủ cho 71 phiếu = 7.100.000đ — header
+           hiện giống hệt. Thiếu 1,8 triệu mà nhìn màn hình không biết.
+
+           NGUY HIỂM VÌ: app TỰ MỞ CỔNG sau 31 giây dù tải xong hay chưa
+           (dòng "setTimeout(... finalizeUserGate ..., SPLASH_QUA_HAN + 6000)").
+           Hiện 62.000 phiếu còn kịp tải trong 31 giây; một năm nữa ~860.000
+           phiếu thì LẦN NÀO CŨNG chưa tải xong -> trả lương thiếu mà không
+           ai biết. Trước bản này, cách duy nhất biết chắc là mở Console gõ
+           "daNhanGoiServer" (anh Tinh đã phải làm vậy hôm 27/08).
+
+           ĐÃ ĐỔI — đúng 2 chỗ, đều trong updateCloudStatus():
+             (a) Nhánh 'synced' tách làm hai:
+                   daNhanGoiServer = true  -> "☁️ Đủ dữ liệu · N phiếu"  (xanh)
+                   daNhanGoiServer = false -> "⏳ Dữ liệu trên máy — CHƯA
+                                               xác nhận"                 (vàng)
+                 Số phiếu lấy từ weighings.length (TỔNG KHO), KHÔNG phải
+                 soPhieuHomNay() như trước — hàm đó chỉ đếm phiếu hôm nay
+                 nên không dùng để biết đã tải đủ.
+             (b) Thêm hàm veMauHeader(): nền #topBar chuyển CAM (#8A5A00)
+                 khi chưa xác nhận, trả về màu gốc khi đã đủ.
+
+           KHÔNG ĐỤNG: công thức tính tiền, listener, cơ chế đồng bộ, ba
+           trạng thái connecting/syncing/error.
+
+           LƯU Ý KHI DÙNG: lúc mới mở app sẽ thấy CAM vài giây rồi tự về
+           xanh. Đó là ĐÚNG — nó phản ánh thật trạng thái dữ liệu.
+           THẤY CAM THÌ KHÔNG TRẢ LƯƠNG, bấm F5 chờ lại.
+
+           Sửa luôn dòng tiêu đề bàn giao: trước ghi "V1.11.8" trong khi
+           file đã là V1.13.0 — sai từ lâu, nay ghi đúng.
+
 ================================================================================
   HẾT PHẦN BÀN GIAO
 ================================================================================
@@ -841,7 +879,7 @@
   <div class="brand-row">
     <div class="brand">
       <div class="brand-title">⚖️ Cân Tôm</div>
-      <div class="brand-status"><span class="ver-badge">V1.13.0</span> · <span id="cloudStatus"></span></div>
+      <div class="brand-status"><span class="ver-badge">V1.13.2</span> · <span id="cloudStatus"></span></div>
     </div>
     <div id="currentUserBar" class="hidden brand-user">
       <span>👤 <span id="currentUserNameLabel"></span></span>
@@ -5405,15 +5443,46 @@ function updateCloudStatus(state){
     lucBatDauGui = 0;
   }
 
+  /* V1.13.2 — TÁCH "đã đồng bộ" THÀNH HAI TRẠNG THÁI KHÁC NHAU.
+     GỐC BỆNH: trước đây gói từ BỘ NHỚ ĐỆM (có thể THIẾU phiếu) và gói từ
+     MÁY CHỦ (đủ) đều hiện "☁️ Đã đồng bộ" y hệt nhau. Nhìn màn hình KHÔNG
+     biết dữ liệu đã đủ hay chưa -> phải mở Console gõ daNhanGoiServer.
+     Nguy hiểm vì app tự mở cổng sau 31 giây dù tải xong hay chưa; kho phiếu
+     càng lớn thì càng hay rơi vào cảnh vào app với dữ liệu thiếu.
+     Nay: chưa nhận gói máy chủ -> chữ VÀNG + nền header CAM. */
+  const daDu = (typeof daNhanGoiServer !== 'undefined') && daNhanGoiServer;
+  // typeof: phòng trường hợp hàm bị gọi trước khi `weighings` kịp khai báo (TDZ)
+  const soPhieuKho = (typeof weighings !== 'undefined' && weighings) ? weighings.length : 0;
+  const tongPhieu = soPhieuKho
+        ? (" · " + soPhieuKho.toLocaleString("en-US") + " phiếu") : "";
   const map = {
     off: "",
     connecting: "☁️ Đang kết nối…",
     syncing: soMucDangGui > 0 ? ("☁️ Đang gửi " + soMucDangGui.toLocaleString("en-US") + " mục…") : "☁️ Đang đồng bộ…",
-    synced: "☁️ Đã đồng bộ" + soPhieuHomNay(),
+    synced: daDu ? ("☁️ Đủ dữ liệu" + tongPhieu)
+                 : "⏳ Dữ liệu trên máy — CHƯA xác nhận",
     error: "⚠️ Lỗi đồng bộ — vẫn lưu trên máy",
   };
   el.textContent = map[state] || "";
-  el.style.color = state === "error" ? "#FFD2CC" : "#B9F5D8";
+  if(state === "error")      el.style.color = "#FFD2CC";
+  else if(state === "synced" && !daDu){ el.style.color = "#FFE082"; el.style.fontWeight = "700"; }
+  else                       el.style.color = "#B9F5D8";
+  veMauHeader();
+}
+
+/* V1.13.2 — nền header CAM khi dữ liệu chưa xác nhận từ máy chủ.
+   Đổi cả nền (không chỉ đổi chữ) vì mục đích là để KHÔNG BỎ SÓT lúc trả lương.
+   Lúc mới mở app sẽ thấy cam vài giây rồi tự về xanh — đó là đúng, nó phản
+   ánh thật trạng thái dữ liệu. */
+function veMauHeader(){
+  const tb = document.getElementById('topBar');
+  if(!tb) return;
+  const daDu = (typeof daNhanGoiServer !== 'undefined') && daNhanGoiServer;
+  if(daDu){
+    tb.style.background = '';          // trả về màu gốc trong CSS
+  }else{
+    tb.style.background = '#8A5A00';   // cam đậm — chưa xác nhận
+  }
 }
 
 let lucBatDauGui = 0;
