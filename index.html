@@ -1,7 +1,7 @@
 <!--
 ================================================================================
   BÀN GIAO — APP CÂN TÔM (Tính tiền công nhật)
-  Phiên bản: V1.16.2    Cập nhật: 24/10/2026
+  Phiên bản: V1.17.0    Cập nhật: 24/10/2026
 --------------------------------------------------------------------------------
   TÀI LIỆU NÀY NẰM NGAY TRONG FILE, KHÔNG BAO GIỜ LỆCH VỚI CODE.
   Mỗi lần sửa file BẮT BUỘC cập nhật luôn phần này (số phiên bản + dòng
@@ -713,6 +713,43 @@
            KHÔNG ĐỤNG: công thức tính tiền, kho dữ liệu, quyền, Cloud
            Function, cách đọc file Excel.
 
+  V1.17.0  PHÂN QUYỀN TỪNG MỤC CON CỦA TAB MUA PHIẾU.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           VẤN ĐỀ: tab Mua phiếu có 5 mục con nhưng chỉ có 3 quyền, và cả 3
+           đều gác HÀNH ĐỘNG chứ không gác VIỆC XEM. Ai mở được tab là thấy
+           hết, kể cả mục "Trả tiền" — nơi hiện số tiền công ty còn nợ chủ
+           và phần LÃI. Người đi mua phiếu không cần biết số đó.
+
+           NĂM QUYỀN MỚI, thêm vào cuối ALL_ACTIONS:
+             mpXemMoi · mpXemNhap · mpXemDot · mpXemThu · mpXemBc
+           Tick = cho xem. Không tick = NÚT BIẾN MẤT, không phải bấm vào mới
+           báo lỗi (để người dùng không tò mò hỏi tại sao bị chặn).
+
+           HAI LỚP KHÁC NHAU, KHÔNG THAY THẾ NHAU:
+             muaPhieuNhap/Thu/Xoa  -> gác HÀNH ĐỘNG (vẫn giữ nguyên)
+             mpXem*                -> gác VIỆC XEM
+           Bỏ tick mpXemThu thì không thấy mục Trả tiền; còn muaPhieuThu là
+           thấy mục đó nhưng không bấm được nút đánh dấu đã thu.
+
+           TÀI KHOẢN CŨ — KHÔNG DI TRÚ DỮ LIỆU, XỬ LÝ LÚC ĐỌC:
+           mpChuaPhanQuyenMuc(u) = cả 5 khoá đều undefined -> tài khoản lập
+           trước V1.17.0 -> coi như được xem hết, app chạy y như cũ.
+           Cố ý KHÔNG dùng luật "không tick ô nào = cho hết": admin bỏ tick
+           cả 5 rồi lưu thì 5 khoá thành false (khác undefined) nên bị khoá
+           thật. Hai trạng thái phân biệt được, nhìn vào đoán được.
+           Không ghi đè staffUsers lúc nâng cấp -> không đụng độ nhiều máy.
+
+           BẪY ĐÃ TRÁNH: màn sửa tài khoản phải TICK SẴN 5 ô cho tài khoản
+           cũ (acts[a] || mpLegacy). Nếu để trống, admin mở ra sửa tên rồi
+           bấm Lưu là vô tình khoá sạch 5 mục của người ta.
+
+           TICK TAB MUA PHIẾU MÀ KHÔNG TICK MỤC NÀO -> hiện chữ báo rõ,
+           không để màn hình trắng.
+
+           KHÔNG ĐỤNG: công thức tiền, phí 1%, trừ công nợ, kho dữ liệu,
+           danh sách xưởng/công ty, Cloud Function, cách đọc file Excel.
+
   V1.16.2  THÊM XƯỞNG 8 (Châu Bá Thảo, nhập từ Excel).
            (md5 ghi ở BAN-GIAO-TONG-THE)
 
@@ -1250,7 +1287,7 @@
   <div class="brand-row">
     <div class="brand">
       <div class="brand-title">⚖️ Cân Tôm</div>
-      <div class="brand-status"><span class="ver-badge">V1.16.2</span> · <span id="cloudStatus"></span></div>
+      <div class="brand-status"><span class="ver-badge">V1.17.0</span> · <span id="cloudStatus"></span></div>
     </div>
     <div id="currentUserBar" class="hidden brand-user">
       <span>👤 <span id="currentUserNameLabel"></span></span>
@@ -1589,6 +1626,15 @@
       <button id="mpSegDot" onclick="mpDoiMuc('dot')">Đã mua</button>
       <button id="mpSegThu" onclick="mpDoiMuc('thu')">Trả tiền</button>
       <button id="mpSegBc" onclick="mpDoiMuc('bc')">Báo cáo</button>
+    </div>
+
+    <!-- V1.17.0 — tick tab Mua phiếu mà không tick mục nào thì hiện chữ này,
+         không để màn hình trắng cho người dùng tưởng app hỏng. -->
+    <div id="mpKhongCoMuc" class="hidden">
+      <div class="empty-state" style="padding:26px 14px;line-height:1.6;">
+        Tài khoản này chưa được cho xem mục nào trong Mua phiếu.<br>
+        <span class="muted" style="font-size:12.5px;">Nhờ quản lý vào Cài đặt › Người dùng để mở quyền xem.</span>
+      </div>
     </div>
 
     <!-- ---- MUA MỚI ---- -->
@@ -3029,7 +3075,10 @@ function logActivity(action, detail){
 }
 
 // ===== QUYỀN THAO TÁC =====
-const ALL_ACTIONS = ['changeDate','catalogEdit','catalogDelete','weighDelete','pay','closePeriod','exportExcel','manageUsers','bypassLock','nhapKgTay','muaPhieuNhap','muaPhieuThu','muaPhieuXoa'];
+/* V1.17.0 — năm quyền cuối (mpXem*) gác VIỆC XEM từng mục con của tab
+   Mua phiếu, khác hẳn ba quyền muaPhieu* ở trên vốn gác HÀNH ĐỘNG. */
+const MP_QUYEN_XEM = ['mpXemMoi','mpXemNhap','mpXemDot','mpXemThu','mpXemBc'];
+const ALL_ACTIONS = ['changeDate','catalogEdit','catalogDelete','weighDelete','pay','closePeriod','exportExcel','manageUsers','bypassLock','nhapKgTay','muaPhieuNhap','muaPhieuThu','muaPhieuXoa'].concat(MP_QUYEN_XEM);
 function actionLabel(k){
   return {
     changeDate:'📅 Cân cho ngày khác (không phải hôm nay)',
@@ -3044,7 +3093,12 @@ function actionLabel(k){
     nhapKgTay:'⌨️ Được gõ tay số KG (không dùng cân điện tử)',
     muaPhieuNhap:'📥 Mua phiếu — nhập đợt từ file Excel',
     muaPhieuThu:'💵 Mua phiếu — đánh dấu công ty đã trả tiền',
-    muaPhieuXoa:'🗑️ Mua phiếu — xoá một đợt đã nhập'
+    muaPhieuXoa:'🗑️ Mua phiếu — xoá một đợt đã nhập',
+    mpXemMoi:'👁 Mua phiếu — xem mục Mua mới',
+    mpXemNhap:'👁 Mua phiếu — xem mục Nhập Excel',
+    mpXemDot:'👁 Mua phiếu — xem mục Đã mua',
+    mpXemThu:'👁 Mua phiếu — xem mục Trả tiền (tiền công ty nợ, lãi)',
+    mpXemBc:'👁 Mua phiếu — xem mục Báo cáo'
   }[k] || k;
 }
 function can(action){
@@ -3152,7 +3206,14 @@ function renderUserList(){
     if(editingUserId===u.id){
       const checks = ALL_TABS.map(t=>`<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" class="edit-user-perm-${u.id}" value="${t}" ${u.permissions[t]?'checked':''}> ${tabLabel(t)}</label>`).join('');
       const acts = u.actions || {};
-      const actChecks = ALL_ACTIONS.map(a=>`<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" class="edit-user-act-${u.id}" value="${a}" ${acts[a]?'checked':''}> ${actionLabel(a)}</label>`).join('');
+      /* V1.17.0 — BẪY: tài khoản lập trước V1.17.0 chưa có 5 khoá mpXem*,
+         đang được xem hết. Nếu vẽ 5 ô đó bỏ trống thì admin mở ra sửa tên
+         rồi bấm Lưu là vô tình khoá sạch 5 mục của người ta. Nên TICK SẴN. */
+      const mpCu = mpChuaPhanQuyenMuc(u);
+      const actChecks = ALL_ACTIONS.map(a=>{
+        const tick = acts[a] || (mpCu && MP_QUYEN_XEM.indexOf(a) >= 0);
+        return `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" class="edit-user-act-${u.id}" value="${a}" ${tick?'checked':''}> ${actionLabel(a)}</label>`;
+      }).join('');
       return `
         <div class="list-item" style="flex-direction:column;align-items:stretch;gap:8px;">
           <input type="text" id="editUserName-${u.id}" value="${escapeHtml(u.name)}" placeholder="Tên hiển thị">
@@ -3447,6 +3508,9 @@ function applyCurrentUserPermissions(){
     el.classList.toggle('hidden', !allowed);
     if(allowed && !firstVisible) firstVisible = t;
   });
+  /* V1.17.0 — đổi người đăng nhập thì ẩn/hiện lại nút các mục con của
+     Mua phiếu, và kéo về mục đầu tiên nếu mục đang mở nay bị khoá. */
+  if(currentUser.permissions['muaphieu']) mpDoiMuc(mpMuc);
   // Nếu tab đang mở không được phép xem, chuyển sang tab đầu tiên được phép
   const activeBtn = document.querySelector('.tab-btn.active');
   const activeKey = activeBtn ? Object.keys(TAB_BTN_ID).find(k=>TAB_BTN_ID[k]===activeBtn.id) : null;
@@ -5658,10 +5722,47 @@ function mpNapNguoiCan(){
   if(giu && co.has(giu)) sel.value = giu;
 }
 
-const MP_MUC = [['moi','mpMucMoi','mpSegMoi'], ['nhap','mpMucNhap','mpSegNhap'],
-                ['dot','mpMucDot','mpSegDot'], ['thu','mpMucThu','mpSegThu'],
-                ['bc','mpMucBc','mpSegBc']];
+/* V1.17.0 — cột thứ tư là QUYỀN XEM của mục đó. */
+const MP_MUC = [['moi','mpMucMoi','mpSegMoi','mpXemMoi'], ['nhap','mpMucNhap','mpSegNhap','mpXemNhap'],
+                ['dot','mpMucDot','mpSegDot','mpXemDot'], ['thu','mpMucThu','mpSegThu','mpXemThu'],
+                ['bc','mpMucBc','mpSegBc','mpXemBc']];
+
+/* Tài khoản lập TRƯỚC V1.17.0: cả 5 khoá đều undefined -> cho xem hết, app
+   chạy y như cũ. Khác hẳn trường hợp admin bỏ tick cả 5 rồi lưu — lúc đó 5
+   khoá là false, và người đó bị khoá thật. Hai trạng thái phân biệt được,
+   nên KHÔNG cần di trú dữ liệu lúc nâng cấp. */
+function mpChuaPhanQuyenMuc(u){
+  const a = (u && u.actions) || {};
+  return MP_QUYEN_XEM.every(q => a[q] === undefined);
+}
+function mpQuyenMuc(quyen){
+  if(!currentUser) return true;                      // chưa thiết lập user nào
+  if(!currentUser.actions) return true;              // tài khoản cũ hoàn toàn
+  if(mpChuaPhanQuyenMuc(currentUser)) return true;   // tài khoản trước V1.17.0
+  return !!currentUser.actions[quyen];
+}
+/* Ẩn/hiện nút từng mục con. Trả về mục đầu tiên còn được phép, '' nếu không
+   được phép mục nào. */
+function mpApDungQuyenMuc(){
+  let dauTien = '';
+  MP_MUC.forEach(([k,,idNut,quyen])=>{
+    const duoc = mpQuyenMuc(quyen);
+    const b = document.getElementById(idNut);
+    if(b) b.classList.toggle('hidden', !duoc);
+    if(duoc && !dauTien) dauTien = k;
+  });
+  const trong = document.getElementById('mpKhongCoMuc');
+  if(trong) trong.classList.toggle('hidden', !!dauTien);
+  return dauTien;
+}
 function mpDoiMuc(muc){
+  const dauTien = mpApDungQuyenMuc();
+  if(!dauTien){                       // không được xem mục nào
+    MP_MUC.forEach(([,idKhoi])=>{ const a=document.getElementById(idKhoi); if(a) a.classList.add('hidden'); });
+    return;
+  }
+  const hang = MP_MUC.find(x=>x[0]===muc);
+  if(!hang || !mpQuyenMuc(hang[3])) muc = dauTien;   // mục bị khoá -> về mục đầu tiên
   mpMuc = muc;
   MP_MUC.forEach(([k,idKhoi,idNut])=>{
     const a = document.getElementById(idKhoi); if(a) a.classList.toggle('hidden', muc!==k);
