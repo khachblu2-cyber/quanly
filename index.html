@@ -1,7 +1,7 @@
 <!--
 ================================================================================
   BÀN GIAO — APP CÂN TÔM (Tính tiền công nhật)
-  Phiên bản: V1.13.5    Cập nhật: 07/09/2026
+  Phiên bản: V1.16.1    Cập nhật: 23/10/2026
 --------------------------------------------------------------------------------
   TÀI LIỆU NÀY NẰM NGAY TRONG FILE, KHÔNG BAO GIỜ LỆCH VỚI CODE.
   Mỗi lần sửa file BẮT BUỘC cập nhật luôn phần này (số phiên bản + dòng
@@ -565,6 +565,233 @@
            tài khoản đang dùng, nếu không cả xưởng không cân được.
            Sau đó gỡ dần từng người khi máy họ đã nối cân.
 
+  V1.14.0  THÊM TAB MUA PHIẾU. Tab mới hoàn toàn, không sửa tab nào có sẵn.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           VIỆC THẬT: ngày 23 quét trả lương lần cuối. Từ 24 trở đi trả tiền
+           công của ngày hôm trước bằng cách in MỘT TỜ A4 danh sách, phát
+           tiền theo tờ đó, trừ phí mua phiếu 1%. Ai chưa nhận tiền của
+           trước ngày 23 thì tự đi tìm người đã trả, KHÔNG nằm trong tờ này.
+
+           CÁCH LÀM — chọn ĐÚNG MỘT NGÀY CÂN, không phải khoảng ngày và
+           không phải số dư luỹ kế. Lý do bắt buộc phải vậy:
+             Từ V1.13.3 kho weighings bị cắt tải, chỉ còn phiếu TỪ HÔM NAY.
+             Ngày cũ lấy từ monthlySummary, mà bản tổng hợp tháng CHỈ gom
+             theo nhân viên — KHÔNG có byUserId. Nên lọc theo người cân trên
+             số dư luỹ kế là KHÔNG THỂ, sẽ ra số sai mà nhìn vẫn như đúng.
+             Phiếu gốc của MỘT ngày thì có byUserId -> lọc chính xác 100%.
+
+           Vì vậy tab này TỰ TẢI phiếu gốc của đúng ngày được chọn
+           (mpTaiPhieuNgay), tính xong là bỏ, KHÔNG nhét vào biến weighings
+           toàn cục. Không đụng cắt tải, không đụng Cloud Function, không
+           đụng bản tổng hợp. ~2.500 lượt đọc mỗi lần đổi ngày.
+
+           PHÍ: 1% rồi làm tròn về bội số 500 GẦN NHẤT (mpTinhPhi).
+             500.000 -> 5.000   439.000 -> 4.500   202.000 -> 2.000
+              70.000 ->   500    32.000 ->   500    20.000 ->     0
+
+           GHI SỔ: phiếu chi ghi ĐỦ số tiền công gốc để công nợ về đúng 0.
+           Phí lưu riêng ở trường payments.phi, KHÔNG trừ vào amount.
+           Ghi 247.500 thay vì 250.000 sẽ làm người ta nợ mãi 2.500.
+
+           CHỐNG TRỪ NỢ HAI LẦN — ba lớp:
+             (a) mpKhoaIn: khoá nút 3 giây sau khi bấm
+             (b) payments.paidDates đã chứa ngày đó -> người đó bị loại khỏi
+                 danh sách ngay, không thể chọn lại
+             (c) mục "Đã mua" in lại từ phiếu chi đã lưu (lọc theo
+                 payments.muaPhieuId), KHÔNG tạo phiếu mới
+
+           HAI TRƯỜNG MỚI TRONG payments — không có collection mới:
+             muaPhieuId : 'MP-20261024-01'  mã đợt, để gom và in lại
+             phi        : số tiền phí đã trừ
+           Phiếu chi cũ không có hai trường này, mọi hàm đều chịu undefined.
+
+           KHÔNG ĐỤNG: công thức tính tiền, dungBangTraCuu, listener, cắt
+           tải, bản tổng hợp, màn hình quét mã trả tiền, các hàm xuất Excel.
+
+           QUYỀN: tab mới dùng khoá 'muaphieu' trong permissions. Nút
+           "In & trừ công nợ" vẫn dùng can('pay') như màn hình quét mã.
+           Tài khoản CŨ chưa có permissions.muaphieu -> undefined -> KHÔNG
+           thấy tab. Phải vào tab Người dùng TICK cho ai cần in.
+
+  V1.14.1  THÊM HAI NÚT CHỈ-ĐỌC vào tab Mua phiếu. Không đụng phần ghi tiền.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           Nay tab có ba nút:
+             "In thử"              -> mpInThu()    chỉ in, KHÔNG trừ nợ
+             "Xuất Excel"          -> mpXuatExcel() chỉ xuất, KHÔNG trừ nợ
+             "In A4 & trừ công nợ" -> mpInVaChi()   như V1.14.0
+
+           TỜ IN THỬ CÓ ĐÓNG DẤU ĐỎ "BẢN XEM THỬ — CHƯA TRỪ CÔNG NỢ,
+           KHÔNG DÙNG ĐỂ PHÁT TIỀN", và KHÔNG in số đợt. Bắt buộc phải có:
+           tờ xem thử mà giống hệt tờ thật thì sẽ có người cầm nhầm đi phát
+           tiền, hệ thống không ghi nhận gì, mất tiền mà không ai lần ra.
+
+           mpInA4 đổi tham số cuối từ laInLai (true/false) sang kieu:
+             'that' tờ chính thức · 'lai' bản in lại · 'thu' bản xem thử
+
+           XUẤT EXCEL DÙNG SHEETJS CÓ SẴN, cố ý KHÔNG nạp ExcelJS. Ba máy
+           cân mạng chập chờn; thêm một thư viện tải từ mạng là thêm một
+           chỗ hỏng đúng lúc cần dùng. Vì vậy file xuất không kẻ khung,
+           không in đậm — chỉ có độ rộng cột và định dạng số. Muốn đẹp như
+           file phần mềm cũ thì làm ở V1.15.0 cùng với báo cáo Số dư.
+
+  V1.15.0  MUA PHIẾU NHIỀU XƯỞNG: nhập Excel, trả tiền, báo cáo.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           BỐI CẢNH: ngoài xưởng của app Cân Tôm (đặt tên X1.27), còn ba
+           xưởng khác (X3, X4, TK1) gửi file Excel bảng lương công nhật.
+           Anh Tinh mua phiếu của cả bốn nơi, cần theo dõi tiền ở MỘT chỗ.
+
+           HAI DÒNG TIỀN — đừng lẫn:
+             anh Tinh -> công nhân : ứng ra   = tongNhan (đã trừ phí)
+             công ty  -> anh Tinh  : hoàn lại = tongTien (đủ tiền công)
+             chênh lệch                       = tongPhi = lãi
+
+           MỘT KHO CÓ LISTENER + MỘT KHO TẢI THEO YÊU CẦU:
+             muaPhieuDot  CHỈ con số, ~250 byte/đợt. 900 đợt/năm < 250KB.
+                          Có listener, tải cùng các kho nhỏ khác.
+             muaPhieuCT   danh sách người, ~4KB/đợt. KHÔNG có listener,
+                          chỉ tải đúng đợt được bấm In lại (mnCacheCT).
+           Nhét chi tiết vào kho tổng sẽ thành 3,6MB/năm tải mỗi lần mở app
+           — đúng bệnh đã chữa ở V1.13.4. Tách hai kho là để không tái phạm.
+
+           ĐỢT NỘI BỘ CŨNG GHI BẢN TỔNG. mpInVaChi nay ghi thêm một bản
+           muaPhieuDot loai:'noibo'. Nhờ vậy mục Trả tiền và Báo cáo nhìn
+           thấy cả hai nguồn. Chi tiết người của đợt nội bộ KHÔNG nhân đôi
+           sang muaPhieuCT — đã nằm sẵn trong payments; mpInLai tự rẽ nhánh
+           theo dot.loai.
+
+           DANH SÁCH XƯỞNG nằm trong appOptions.xuongList (đã đồng bộ sẵn),
+           KHÔNG tạo kho mới. Chưa khai thì dùng MP_XUONG_MAC_DINH.
+           mxNapChon() còn gom cả xưởng chỉ còn trong dữ liệu cũ mà đã bị
+           gỡ khỏi danh sách — không thì đợt của họ biến mất khỏi báo cáo.
+
+           CHỐNG SAI SỐ:
+             (a) Cảnh báo nhập trùng: cùng xưởng + cùng ngày cân + cùng
+                 tổng tiền -> hỏi lại. CHỈ cảnh báo, không chặn cứng.
+             (b) mnKiem() chặn in/lưu khi thiếu xưởng hoặc thiếu ngày cân.
+                 Thà không ra giấy còn hơn ra tờ tiền sai ngày.
+             (c) KHÔNG cho xoá đợt NỘI BỘ ở đây — xoá bản tổng mà phiếu chi
+                 còn thì công nợ sai. Phải xoá từng phiếu bên tab Công nợ.
+             (d) Phục hồi sao lưu: file CŨ không có khoá muaPhieuDot ->
+                 GIỮ NGUYÊN dữ liệu đang có, không xoá trắng.
+
+           NHẬP EXCEL KHÔNG ĐỤNG CÔNG NỢ. Người trong file không có hồ sơ
+           trong app, không có công nợ, nên KHÔNG tạo nhân viên giả, KHÔNG
+           tạo phiếu cân giả, KHÔNG ghi payments. Chỉ lưu bản tổng + chi
+           tiết để in. Ai đã nhận tiền thì quản lý bằng tờ in có chữ ký.
+
+           BA QUYỀN MỚI: muaPhieuNhap · muaPhieuThu · muaPhieuXoa.
+           Tài khoản cũ chưa có -> undefined -> can() trả false -> không
+           làm được. Phải vào tab Người dùng tick cho ai cần.
+
+           KHÔNG ĐỤNG: công thức tính tiền, dungBangTraCuu, cắt tải, bản
+           tổng hợp, Cloud Function, màn hình quét mã trả tiền.
+
+  V1.15.1  VÁ LỖI DƯ TRANG TRẮNG KHI IN + tách nút Lưu. Ba chỗ.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           (a) LỖI DƯ TRANG — có sẵn từ lâu, nay mới lộ.
+               Quy tắc @media print chỉ dùng visibility:hidden. Nội dung bị
+               GIẤU nhưng VẪN CHIẾM CHỖ, nên màn hình dài bao nhiêu thì in
+               ra bấy nhiêu trang trắng. Màn Nhập Excel 101 dòng cao
+               6.812px -> in ra 5 trang thay vì 3.
+               VÁ: thêm  body > *:not(#printArea){ display:none !important; }
+               printArea là con TRỰC TIẾP của body nên an toàn. Giữ hai
+               dòng visibility cũ làm lưới an toàn.
+               ẢNH HƯỞNG: vá luôn cho MỌI tờ in A4 khác của app (bảng tổng
+               hợp cân, báo cáo thành phẩm, báo cáo công nợ) — các tờ đó
+               trước nay cũng dư trang trắng, chỉ là chưa ai để ý.
+
+           (b) TÁCH NÚT LƯU. Mục Nhập Excel nay có "💾 Lưu" (chỉ lưu) và
+               "💾 Lưu & In A4". mnLuuDot(coIn) nhận tham số.
+               Lưu rồi vẫn in lại được ở mục Đã mua.
+
+           (c) Dòng báo kết quả nhắc rõ vào "Đã mua" để in lại hoặc xoá.
+
+           KHÔNG ĐỤNG: công thức tính tiền, kho dữ liệu, quyền, Cloud
+           Function, cách đọc file Excel.
+
+  V1.16.1  LÀM NỔI CHỮ XƯỞNG TRÊN TỜ IN + hai chỗ vướng ở màn hình.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           LÝ DO: in bốn tờ một lượt cho bốn xưởng rồi phát đi bốn nơi.
+           Chữ "Xưởng: X1" cũ nằm lẫn trong dòng 12,5px cùng Người cân ·
+           Phí · Số đợt, xếp chồng giấy lên là không phân loại được, phải
+           mở từng tờ ra xem.
+
+           (a) Ô XƯỞNG góc phải trên phần đầu tờ: 18px, đậm, viền 2px,
+               chữ hoa. Lật mép giấy là thấy. Dùng mxTen() nên ra "XƯỞNG 1",
+               "TẤN KHỞI 1" chứ không phải mã X1/TK1.
+               Nhóm chưa gán xưởng: chữ "CHƯA GÁN", viền đứt nét, màu đỏ
+               #9B2F22 — khác hẳn để biết tờ này còn phải xử lý.
+               Bỏ "Xưởng: ..." khỏi dòng chi tiết, khỏi lặp hai lần.
+               Vì mpToA4() là khuôn chung nên áp luôn cho cả ba đường in:
+               In thử · In & trừ công nợ · In lại.
+
+           (b) Mục "Đã mua": ô chọn Xưởng xuống hàng riêng. Để chung hàng
+               với hai ô ngày thì trên máy tính bảng nó bị cắt mép phải,
+               chỉ còn thấy mũi tên, không bấm được.
+
+           (c) Mục "Mua mới": khi lượt dính nhiều xưởng, ô công ty bị khoá
+               nhưng VẪN hiện tên một công ty -> dễ tưởng cả bốn tờ in
+               chung tên đó. Nay hiện "— tự chọn theo xưởng —" (value
+               __auto__). Chỉ thêm vào ô mpCty, KHÔNG thêm vào mnCtyChon
+               của mục Nhập Excel vì ở đó người dùng phải tự chọn thật.
+
+           KHÔNG ĐỤNG: công thức tiền, phí 1%, cơ chế trừ công nợ, kho dữ
+           liệu, quyền, Cloud Function, cách đọc file Excel, cách tách đợt
+           theo xưởng. Mã đợt vẫn theo ngày lập như cũ.
+
+  V1.16.0  BA CÔNG TY, SÁU XƯỞNG. Tách đợt theo xưởng, chọn công ty lúc in.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           PHÁT HIỆN: app Cân Tôm KHÔNG phải một xưởng. Tên tài khoản người
+           cân có đuôi xưởng — "Nguyễn Luyện X1", "Cẩm Nhung X2",
+           "Châu My X7". Tên "X1.27" đặt ở V1.15.0 là SAI, đã bỏ.
+
+           SÁU XƯỞNG, BA PHÁP NHÂN:
+             X1, X2, X7  -> CTY TNHH MTV THỦY SẢN CHÂU BÁ THẢO  (nội bộ)
+             X3          -> CTY TNHH XNK THỦY SẢN CHÂU CẨM      (nhập Excel)
+             X4, TK1     -> CTY TNHH XNK THỦY SẢN TẤN KHỞI      (nhập Excel)
+           File 20.10_x3.xlsx ghi TẤN KHỞI là do chưa sửa file; X3 là CHÂU
+           CẨM — anh Tinh xác nhận 22/10.
+           Địa chỉ Châu Cẩm CHƯA CÓ, để trống trong MP_CTY_MAC_DINH.
+
+           GÁN XƯỞNG CHO TÀI KHOẢN — staffUsers.xuong, chọn trong tab Người
+           dùng. KHÔNG đoán theo đuôi tên khi chạy: chỉ cần ai sửa tên tài
+           khoản là đợt gán sai xưởng, mà sai thì báo cáo tiền sai theo.
+           mxGoiYTuTen() chỉ CHỌN SẴN gợi ý trong ô, kèm chữ "(gợi ý theo
+           tên)", phải bấm Lưu mới thành thật.
+           Chưa gán -> đợt ghi xưởng rỗng, báo cáo gom "(chưa gán)", và màn
+           Mua mới hiện cảnh báo đỏ.
+
+           TÁCH ĐỢT THEO XƯỞNG. mpInVaChi gom các dòng đã tick theo xưởng,
+           MỖI XƯỞNG MỘT ĐỢT riêng, rồi in MỘT LẦN ra nhiều tờ
+           (mpInNhieuTo, page-break giữa các tờ). Một đợt dính hai xưởng thì
+           báo cáo không tách được và tờ in sai pháp nhân.
+
+           XƯỞNG CỦA MỘT DÒNG = xưởng của người cân nhiều tiền nhất cho
+           người đó trong ngày. KHÔNG chia đôi khi dính hai xưởng: chia đôi
+           làm lệch làm tròn và sinh nguy cơ trả hai lần cùng một ngày.
+           Trường hợp này được đánh dấu r.nhieuXuong.
+
+           CHỌN CÔNG TY LÚC IN. Ô "Công ty in trên tờ" ở cả Mua mới và Nhập
+           Excel. Mặc định theo xưởng, đổi người cân thì nhảy theo. ĐỔI ĐƯỢC
+           vì có khi xưởng này in dưới pháp nhân khác.
+           NGOẠI LỆ: lượt in dính nhiều xưởng -> ô bị KHOÁ và mỗi tờ lấy
+           công ty mặc định của xưởng mình; một ô không thể đúng cho ba
+           pháp nhân cùng lúc.
+
+           GỘP KHUÔN TỜ IN. Trước có hai bản sao gần giống nhau (đợt nội bộ
+           và đợt nhập ngoài) — sửa một chỗ quên chỗ kia. Nay chỉ còn
+           mpToA4() dựng HTML + mpInNhieuTo() in. Địa chỉ và điện thoại lấy
+           theo công ty đang chọn, không lấy cứng companyInfo nữa.
+
+           KHÔNG ĐỤNG: công thức tính tiền, dungBangTraCuu, cắt tải, bản
+           tổng hợp, Cloud Function, màn hình quét mã trả tiền.
+
 ================================================================================
   HẾT PHẦN BÀN GIAO
 ================================================================================
@@ -887,6 +1114,14 @@
     input[type=date]{font-size:12px;padding:8px 6px;}
   }
   @media print{
+    /* V1.15.1 — VÁ LỖI DƯ TRANG TRẮNG.
+       Trước đây chỉ dùng visibility:hidden: nội dung bị GIẤU nhưng VẪN
+       CHIẾM CHỖ, nên màn hình dài bao nhiêu thì đẻ ra bấy nhiêu trang
+       trắng. Màn Nhập Excel 101 dòng cao 6.812px -> in ra 5 trang thay
+       vì 3. Nay thu gọn hẳn mọi anh em của vùng in về display:none.
+       printArea là con TRỰC TIẾP của body nên quy tắc này an toàn.
+       Giữ luôn hai dòng visibility cũ làm lưới an toàn. */
+    body > *:not(#printArea){ display:none !important; }
     body *{visibility:hidden;}
     #printArea, #printArea *{visibility:visible;}
     #printArea{position:absolute;top:0;left:0;width:100%;display:block !important;}
@@ -895,11 +1130,21 @@
     @page{ size: A4; margin: 15mm 14mm; }
   }
   .report-print-page{background:#fff;font-family:'Inter',sans-serif;color:#111;}
-  .report-print-header{text-align:center;margin-bottom:16px;border-bottom:2px solid #111;padding-bottom:10px;}
+  .report-print-header{text-align:center;margin-bottom:16px;border-bottom:2px solid #111;padding-bottom:10px;position:relative;}
   .report-print-header .co-name{font-weight:700;font-size:15px;}
   .report-print-header .co-sub{font-size:11.5px;color:#444;margin-top:1px;}
   .report-print-header h2{margin:10px 0 2px;font-size:19px;letter-spacing:.5px;}
   .report-print-header .period{font-size:12.5px;color:#333;margin-top:2px;}
+  /* V1.16.1 — Ô XƯỞNG góc phải trên tờ in. Đặt ở GÓC chứ không giữa trang:
+     in bốn tờ cho bốn xưởng rồi xếp chồng lên nhau, chỉ cần lật mép giấy
+     là phân loại được, không phải mở từng tờ. */
+  .report-print-header .xg-box{position:absolute;top:0;right:0;font-size:16px;font-weight:700;
+    letter-spacing:1px;line-height:1;padding:5px 12px;border:2px solid #111;border-radius:4px;
+    text-transform:uppercase;white-space:nowrap;}
+  .report-print-header .xg-box.xg-chua{border-style:dashed;border-color:#9B2F22;color:#9B2F22;}
+  /* Chừa chỗ hai bên cho tên công ty để không chạy xuống dưới ô xưởng.
+     Chừa cả hai bên để tên vẫn cân giữa trang. */
+  .report-print-header .co-name{padding:0 150px;}
   table.report-print-table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:10px;}
   table.report-print-table th, table.report-print-table td{border:1px solid #999;padding:5px 7px;text-align:right;}
   table.report-print-table th{background:#eee;font-weight:700;}
@@ -969,6 +1214,11 @@
   table.debt-report-table th{background:var(--blue);color:#fff;}
   table.debt-report-table td:nth-child(2){text-align:left;}
   table.debt-report-table tr.total-row td{font-weight:700;background:#EAF1FB;}
+  /* ===== V1.14.0 — tab Mua phiếu. Ba lớp mới, không đụng lớp nào có sẵn. ===== */
+  .mp-tin{background:#EEF4FB;border:1px solid #C5D9F0;border-radius:8px;padding:8px 11px;
+    font-size:12.5px;color:var(--blue-dk);line-height:1.5;}
+  .mp-dong{display:flex;justify-content:space-between;font-size:13.5px;padding:3px 0;}
+  .mp-dong b{font-variant-numeric:tabular-nums;}
 </style>
 </head>
 <body>
@@ -977,7 +1227,7 @@
   <div class="brand-row">
     <div class="brand">
       <div class="brand-title">⚖️ Cân Tôm</div>
-      <div class="brand-status"><span class="ver-badge">V1.13.5</span> · <span id="cloudStatus"></span></div>
+      <div class="brand-status"><span class="ver-badge">V1.16.1</span> · <span id="cloudStatus"></span></div>
     </div>
     <div id="currentUserBar" class="hidden brand-user">
       <span>👤 <span id="currentUserNameLabel"></span></span>
@@ -989,6 +1239,7 @@
     <button class="tab-btn active" id="tabBtnWeigh" onclick="switchTab('weigh')">⚖️ Cân tôm</button>
     <button class="tab-btn" id="tabBtnCatalog" onclick="switchTab('catalog')">📋 Danh mục</button>
     <button class="tab-btn" id="tabBtnDebt" onclick="switchTab('debt')">💰 Công nợ</button>
+    <button class="tab-btn" id="tabBtnMuaPhieu" onclick="switchTab('muaphieu')">🧾 Mua phiếu</button>
     <button class="tab-btn hidden" id="tabBtnSettle" onclick="switchTab('settle')">🧾 Chốt &amp; In</button>
     <button class="tab-btn" id="tabBtnReport" onclick="switchTab('report')">📊 Báo cáo</button>
     <button class="tab-btn" id="tabBtnConfig" onclick="switchTab('config')">⚙️ Cài đặt</button>
@@ -1304,6 +1555,146 @@
 </div>
 
 
+<!-- ================= TAB MUA PHIẾU (V1.14.0) ================= -->
+<div id="muaPhieuTab" class="hidden">
+  <div class="wrap app-header">
+    <div class="app-title">🧾 Mua phiếu</div>
+
+    <div class="section-tab">
+      <button class="active" id="mpSegMoi" onclick="mpDoiMuc('moi')">Mua mới</button>
+      <button id="mpSegNhap" onclick="mpDoiMuc('nhap')">Nhập Excel</button>
+      <button id="mpSegDot" onclick="mpDoiMuc('dot')">Đã mua</button>
+      <button id="mpSegThu" onclick="mpDoiMuc('thu')">Trả tiền</button>
+      <button id="mpSegBc" onclick="mpDoiMuc('bc')">Báo cáo</button>
+    </div>
+
+    <!-- ---- MUA MỚI ---- -->
+    <div id="mpMucMoi">
+      <div class="card">
+        <div class="row">
+          <div class="field">
+            <label>Ngày cân</label>
+            <input type="date" id="mpNgay" onchange="mpDoiNgay()">
+          </div>
+          <div class="field">
+            <label>Người cân</label>
+            <select id="mpNguoiCan" onchange="renderMuaPhieu()">
+              <option value="">— Tất cả —</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:7px;">
+          <label>Công ty in trên tờ</label>
+          <select id="mpCty" onchange="renderMuaPhieu()"></select>
+        </div>
+        <div id="mpBangTin" style="margin-top:8px;"></div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <div id="mpBangWrap"></div>
+      </div>
+      <div id="mpDaChiTin"></div>
+      <div id="mpTongWrap"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-outline" id="mpNutInThu" style="flex:1;"
+                onclick="mpInThu()">🖨️ In thử</button>
+        <button class="btn btn-outline" id="mpNutExcel" style="flex:1;"
+                onclick="mpXuatExcel()">📊 Xuất Excel</button>
+      </div>
+      <button class="btn btn-primary btn-block" id="mpNutIn" style="margin-top:8px;"
+              onclick="mpInVaChi()">🖨️ In A4 &amp; trừ công nợ</button>
+      <div id="mpKetQua" style="margin-top:7px;font-size:13px;"></div>
+    </div>
+
+    <!-- ---- NHẬP EXCEL (V1.15.0) ---- -->
+    <div id="mpMucNhap" class="hidden">
+      <div class="card">
+        <div id="mpNhapTha" onclick="document.getElementById('mpFile').click()"
+             style="border:2px dashed #B9CCE4;border-radius:10px;padding:22px 14px;text-align:center;background:#F8FAFD;cursor:pointer;">
+          <div style="font-size:26px;">📂</div>
+          <div style="font-weight:600;margin-top:5px;">Bấm chọn file, hoặc kéo thả vào đây</div>
+          <div class="muted" style="font-size:12px;margin-top:2px;">.xlsx bảng lương công nhật của xưởng</div>
+        </div>
+        <input type="file" id="mpFile" accept=".xlsx,.xls" style="display:none;" onchange="mnChonFile(this.files[0])">
+        <div id="mnTin"></div>
+        <div id="mnCaiDat" class="hidden">
+          <div class="row" style="margin-top:9px;">
+            <div class="field"><label>Xưởng</label>
+              <select id="mnXuong" onchange="mnDoiXuong()"></select></div>
+            <div class="field"><label>Công ty in trên tờ</label>
+              <select id="mnCtyChon" onchange="mnDoiCty()"></select></div>
+            <div class="field"><label>Ngày cân</label>
+              <input type="date" id="mnNgay" onchange="renderMnBang()"></div>
+          </div>
+          <div class="field" style="margin-top:7px;"><label>Tên công ty in trên đầu trang</label>
+            <input type="text" id="mnCty" oninput="renderMnBang()"></div>
+          <div id="mnCtyLech"></div>
+        </div>
+      </div>
+      <div style="overflow-x:auto;"><div id="mnBangWrap"></div></div>
+      <div id="mnTongWrap"></div>
+      <div id="mnNutWrap"></div>
+      <div id="mnKetQua" style="margin-top:7px;font-size:13px;"></div>
+    </div>
+
+    <!-- ---- ĐÃ MUA ---- -->
+    <div id="mpMucDot" class="hidden">
+      <div class="card">
+        <div class="row">
+          <div class="field"><label>Từ ngày</label><input type="date" id="mpDotTu" onchange="renderMpDot()"></div>
+          <div class="field"><label>Đến ngày</label><input type="date" id="mpDotDen" onchange="renderMpDot()"></div>
+        </div>
+        <!-- V1.16.1 — ô Xưởng xuống hàng riêng. Để chung hàng với hai ô ngày
+             thì trên máy tính bảng nó bị cắt mép phải, chỉ còn thấy mũi tên. -->
+        <div class="field" style="margin-top:7px;">
+          <label>Xưởng</label><select id="mpDotXuong" onchange="renderMpDot()"></select>
+        </div>
+      </div>
+      <div id="mpDotWrap"></div>
+    </div>
+
+    <!-- ---- TRẢ TIỀN (V1.15.0) ---- -->
+    <div id="mpMucThu" class="hidden">
+      <div class="card">
+        <div class="row">
+          <div class="field"><label>Từ ngày</label><input type="date" id="mtTu" onchange="renderMpThu()"></div>
+          <div class="field"><label>Đến ngày</label><input type="date" id="mtDen" onchange="renderMpThu()"></div>
+          <div class="field"><label>Xưởng</label><select id="mtXuong" onchange="renderMpThu()"></select></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:9px;">
+          <button class="btn" id="mtNutChua" style="flex:1;" onclick="mtDoiCheDo('chua')">🔴 Chưa thu</button>
+          <button class="btn" id="mtNutRoi"  style="flex:1;" onclick="mtDoiCheDo('roi')">👁 Xem đã thu</button>
+        </div>
+      </div>
+      <div id="mtTongWrap"></div>
+      <div style="overflow-x:auto;"><div id="mtBangWrap"></div></div>
+      <div id="mtChonWrap"></div>
+    </div>
+
+    <!-- ---- BÁO CÁO (V1.15.0) ---- -->
+    <div id="mpMucBc" class="hidden">
+      <div class="section-tab" style="margin-bottom:9px;">
+        <button class="active" id="mbSegTh" onclick="mbDoiMuc('th')">Tổng hợp</button>
+        <button id="mbSegCt" onclick="mbDoiMuc('ct')">Chi tiết</button>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div class="field"><label>Từ ngày</label><input type="date" id="mbTu" onchange="renderMpBaoCao()"></div>
+          <div class="field"><label>Đến ngày</label><input type="date" id="mbDen" onchange="renderMpBaoCao()"></div>
+          <div class="field" id="mbXuongWrap"><label>Xưởng</label><select id="mbXuong" onchange="renderMpBaoCao()"></select></div>
+        </div>
+      </div>
+      <div style="overflow-x:auto;"><div id="mbBangWrap"></div></div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-outline" style="flex:1;" onclick="mbIn()">🖨️ In</button>
+        <button class="btn btn-outline" style="flex:1;" onclick="mbXuatExcel()">📊 Xuất Excel</button>
+      </div>
+    </div>
+  </div>
+  <div style="height:40px;"></div>
+</div>
+
+
 <div id="settleTab" class="hidden">
   <div class="wrap app-header">
     <div class="app-title">🧾 Chốt ngày &amp; In phiếu</div>
@@ -1538,6 +1929,7 @@
             <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" class="new-user-perm" value="weigh" checked> ⚖️ Cân tôm</label>
             <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" class="new-user-perm" value="catalog"> 📋 Danh mục</label>
             <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" class="new-user-perm" value="debt"> 💰 Công nợ</label>
+            <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" class="new-user-perm" value="muaphieu"> 🧾 Mua phiếu</label>
             <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" class="new-user-perm" value="settle"> 🧾 Chốt & In</label>
             <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" class="new-user-perm" value="report"> 📊 Báo cáo</label>
             <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" class="new-user-perm" value="config"> ⚙️ Cài đặt</label>
@@ -1681,6 +2073,7 @@ const OPEN_KEY = "can-tom-opening-v1";
 const PAY_KEY = "can-tom-payments-v1";
 const OVERTIME_KEY = "can-tom-overtime-v1";
 const STAFF_KEY = "can-tom-staff-users-v1";
+const MPDOT_KEY = "can-tom-muaphieu-dot-v1";   // V1.15.0 — bản tổng mỗi đợt
 const COMPANY_KEY = "can-tom-company-v1";
 const OPTIONS_KEY = "can-tom-options-v1";
 const PIN_KEY = "can-tom-pin-v1";
@@ -1783,6 +2176,11 @@ let openingBalances = loadJSON(OPEN_KEY, []);
 let payments = loadJSON(PAY_KEY, []);
 let overtimeDays = loadJSON(OVERTIME_KEY, []);
 let staffUsers = loadJSON(STAFF_KEY, []);
+/* V1.15.0 — BẢN TỔNG MỖI ĐỢT MUA PHIẾU (nội bộ lẫn nhập từ Excel).
+   CHỈ con số, KHÔNG có danh sách người -> ~250 byte/đợt. Một năm 900 đợt
+   cũng chưa tới 250KB, tải cùng các kho nhỏ khác là an toàn.
+   Danh sách người nằm ở kho muaPhieuCT, CHỈ tải khi bấm In lại. */
+let muaPhieuDot = loadJSON(MPDOT_KEY, []);
 let activityLog = loadJSON('cantom_activitylog', []);
 let devices = loadJSON('cantom_devices', []);
 let currentUser = null;
@@ -1821,12 +2219,14 @@ function switchTab(tab){
   document.getElementById('weighTab').classList.toggle('hidden', tab!=='weigh');
   document.getElementById('catalogTab').classList.toggle('hidden', tab!=='catalog');
   document.getElementById('debtTab').classList.toggle('hidden', tab!=='debt');
+  document.getElementById('muaPhieuTab').classList.toggle('hidden', tab!=='muaphieu');
   document.getElementById('settleTab').classList.toggle('hidden', tab!=='settle');
   document.getElementById('reportTab').classList.toggle('hidden', tab!=='report');
   document.getElementById('configTab').classList.toggle('hidden', tab!=='config');
   document.getElementById('tabBtnWeigh').classList.toggle('active', tab==='weigh');
   document.getElementById('tabBtnCatalog').classList.toggle('active', tab==='catalog');
   document.getElementById('tabBtnDebt').classList.toggle('active', tab==='debt');
+  document.getElementById('tabBtnMuaPhieu').classList.toggle('active', tab==='muaphieu');
   document.getElementById('tabBtnSettle').classList.toggle('active', tab==='settle');
   document.getElementById('tabBtnReport').classList.toggle('active', tab==='report');
   document.getElementById('tabBtnConfig').classList.toggle('active', tab==='config');
@@ -1837,6 +2237,7 @@ function switchTab(tab){
     renderDebtTab();
     setDebtSection('report');
   }
+  if(tab==='muaphieu'){ moTabMuaPhieu(); }
   if(tab==='settle'){
     if(!document.getElementById('settleDate').value) document.getElementById('settleDate').value = todayKey();
     renderSettlement();
@@ -2456,7 +2857,7 @@ function fullBackupExport(){
         + 'sao lưu lúc này sẽ THIẾU phiếu cân.');
     return;
   }
-  const payload = { employees, products, weighings, openingBalances, payments, overtimeDays, companyInfo, appOptions, exportedAt: new Date().toISOString() };
+  const payload = { employees, products, weighings, openingBalances, payments, overtimeDays, muaPhieuDot, companyInfo, appOptions, exportedAt: new Date().toISOString() };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -2485,6 +2886,9 @@ function fullBackupImport(e){
       openingBalances = data.openingBalances || [];
       payments = data.payments || [];
       overtimeDays = data.overtimeDays || [];
+      // V1.15.0 — file sao lưu CŨ không có khoá này; giữ nguyên dữ liệu đang
+      // có thay vì xoá trắng, vì bản sao lưu cũ không chứng minh được là rỗng.
+      if(Array.isArray(data.muaPhieuDot)) muaPhieuDot = data.muaPhieuDot;
       companyInfo = data.companyInfo || { name:"", address:"", phone:"" };
       appOptions = data.appOptions || { backupDays:3, kgDecimals:1 };
       saveAll();
@@ -2602,7 +3006,7 @@ function logActivity(action, detail){
 }
 
 // ===== QUYỀN THAO TÁC =====
-const ALL_ACTIONS = ['changeDate','catalogEdit','catalogDelete','weighDelete','pay','closePeriod','exportExcel','manageUsers','bypassLock','nhapKgTay'];
+const ALL_ACTIONS = ['changeDate','catalogEdit','catalogDelete','weighDelete','pay','closePeriod','exportExcel','manageUsers','bypassLock','nhapKgTay','muaPhieuNhap','muaPhieuThu','muaPhieuXoa'];
 function actionLabel(k){
   return {
     changeDate:'📅 Cân cho ngày khác (không phải hôm nay)',
@@ -2614,7 +3018,10 @@ function actionLabel(k){
     exportExcel:'📊 Xuất Excel',
     manageUsers:'👥 Quản lý người dùng',
     bypassLock:'🔓 Bỏ qua khoá giờ / máy / GPS',
-    nhapKgTay:'⌨️ Được gõ tay số KG (không dùng cân điện tử)'
+    nhapKgTay:'⌨️ Được gõ tay số KG (không dùng cân điện tử)',
+    muaPhieuNhap:'📥 Mua phiếu — nhập đợt từ file Excel',
+    muaPhieuThu:'💵 Mua phiếu — đánh dấu công ty đã trả tiền',
+    muaPhieuXoa:'🗑️ Mua phiếu — xoá một đợt đã nhập'
   }[k] || k;
 }
 function can(action){
@@ -2630,8 +3037,8 @@ function requirePerm(action){
 
 // Tab 'settle' (Chốt & In) tạm ẩn — code vẫn giữ nguyên, thêm lại vào mảng này là hiện lại.
 // Tab đó chỉ đọc và hiển thị, không ghi dữ liệu, nên ẩn đi không mất gì.
-const ALL_TABS = ['weigh','catalog','debt','report','config'];
-const TAB_BTN_ID = { weigh:'tabBtnWeigh', catalog:'tabBtnCatalog', debt:'tabBtnDebt', settle:'tabBtnSettle', report:'tabBtnReport', config:'tabBtnConfig' };
+const ALL_TABS = ['weigh','catalog','debt','muaphieu','report','config'];
+const TAB_BTN_ID = { weigh:'tabBtnWeigh', catalog:'tabBtnCatalog', debt:'tabBtnDebt', muaphieu:'tabBtnMuaPhieu', settle:'tabBtnSettle', report:'tabBtnReport', config:'tabBtnConfig' };
 
 function nextUserCode(){
   const nums = staffUsers.map(u=>parseInt(u.code,10)).filter(n=>!isNaN(n));
@@ -2671,7 +3078,7 @@ function addStaffUser(){
   alert(`Đã thêm người dùng "${name}".`);
 }
 function tabLabel(key){
-  return { weigh:'⚖️ Cân tôm', catalog:'📋 Danh mục', debt:'💰 Công nợ', settle:'🧾 Chốt & In', report:'📊 Báo cáo', config:'⚙️ Cài đặt' }[key];
+  return { weigh:'⚖️ Cân tôm', catalog:'📋 Danh mục', debt:'💰 Công nợ', muaphieu:'🧾 Mua phiếu', settle:'🧾 Chốt & In', report:'📊 Báo cáo', config:'⚙️ Cài đặt' }[key];
 }
 let editingUserId = null;
 function editStaffUser(id){ if(!requirePerm('manageUsers')) return; editingUserId = id; renderUserList(); }
@@ -2679,6 +3086,7 @@ function cancelEditUser(){ editingUserId = null; renderUserList(); }
 function saveEditUser(id){
   const u = staffUsers.find(x=>x.id===id);
   if(!u) return;
+  const xuongInput = document.getElementById('editUserXuong-'+id);
   const nameInput = document.getElementById('editUserName-'+id);
   const userInput = document.getElementById('editUserUsername-'+id);
   const passInput = document.getElementById('editUserPassword-'+id);
@@ -2694,6 +3102,7 @@ function saveEditUser(id){
   const acts = {};
   document.querySelectorAll('.edit-user-act-'+id).forEach(cb=>{ acts[cb.value] = cb.checked; });
   u.name = newName; u.username = newUsername; u.permissions = perms; u.actions = acts;
+  u.xuong = xuongInput ? (xuongInput.value || '') : (u.xuong || '');   // V1.16.0
   if(newPass) u.password = newPass;   // để trống = giữ nguyên mật khẩu cũ
   u.fullName = (document.getElementById('editUserFullName-'+id)?.value||'').trim();
   editingUserId = null;
@@ -2727,6 +3136,9 @@ function renderUserList(){
           <input type="text" id="editUserFullName-${u.id}" value="${escapeHtml(u.fullName||'')}" placeholder="Họ tên đầy đủ">
           <input type="text" id="editUserUsername-${u.id}" value="${escapeHtml(u.username || u.code || '')}" autocapitalize="none" placeholder="Tên đăng nhập">
           <input type="password" id="editUserPassword-${u.id}" autocomplete="new-password" placeholder="Mật khẩu mới (để trống = giữ nguyên)">
+          <div class="muted" style="font-size:11.5px;font-weight:700;margin-top:4px;">Xưởng của người này</div>
+          <select id="editUserXuong-${u.id}">${mxOptionCho(u)}</select>
+          <div class="muted" style="font-size:11px;line-height:1.5;">Dùng để tách đợt mua phiếu và báo cáo theo xưởng. Chưa gán thì đợt sẽ vào nhóm “(chưa gán)”.</div>
           <div class="muted" style="font-size:11.5px;font-weight:700;margin-top:4px;">Được xem tab</div>
           <div style="display:flex;flex-direction:column;gap:4px;">${checks}</div>
           <div class="muted" style="font-size:11.5px;font-weight:700;margin-top:4px;">Được làm việc</div>
@@ -2740,6 +3152,8 @@ function renderUserList(){
     }
     const isPendingDel = pendingDeleteKey === ('user:'+u.id);
     const activeTabs = ALL_TABS.filter(t=>u.permissions[t]).map(tabLabel).join(', ') || '(không tab nào)';
+    const nhanXuong = u.xuong ? ' · <b>' + escapeHtml(u.xuong) + '</b>'
+      : ' · <span style="color:var(--rust);">chưa gán xưởng</span>';
     const uacts = u.actions || {};
     const activeActs = ALL_ACTIONS.filter(a=>uacts[a]).map(a=>actionLabel(a).replace(/^[^ ]+ /,'')).join(', ') || '(chỉ xem)';
     return `
@@ -2748,6 +3162,7 @@ function renderUserList(){
           <strong>${escapeHtml(u.name)}</strong> <span class="badge">${escapeHtml(u.code)}</span>
           ${u.fullName?`<div class="muted" style="font-size:12px;">${escapeHtml(u.fullName)}</div>`:''}
           <div class="muted font-mono" style="font-size:11.5px;margin-top:2px;">🔑 ${escapeHtml(u.username || u.code || '')}</div>
+          <div class="muted" style="font-size:11.5px;margin-top:2px;">🏭 Xưởng:${nhanXuong.replace(' · ','')}</div>
           <div class="muted" style="font-size:11.5px;margin-top:2px;">👁 ${activeTabs}</div>
           <div class="muted" style="font-size:11.5px;margin-top:2px;">🔑 ${activeActs}</div>
         </div>
@@ -5158,6 +5573,1442 @@ function exportDebtBalanceExcel(){
   XLSX.writeFile(wb, `so-du-cong-no-${fromKey}_${toKey}.xlsx`);
 }
 
+/* =====================================================================
+   TAB MUA PHIẾU — V1.14.0
+   Mua gom tiền công của MỘT ngày cân, trừ phí 1%, in một tờ A4.
+   Đọc kỹ mục V1.14.0 trong phần bàn giao đầu file trước khi sửa.
+   ===================================================================== */
+let mpPhieuNgay = [];     // phiếu gốc của ngày đang xem — KHÔNG nhét vào weighings
+let mpNgayDaTai = '';     // dateKey đã tải xong
+let mpDangTai   = false;
+let mpLoiTai    = '';
+let mpBoChon    = new Set();   // employeeId BỊ BỎ TICK (mặc định mua hết)
+let mpKhoaIn    = 0;           // chống bấm trúng hai lần
+let mpMuc       = 'moi';
+
+/* Phí 1%, làm tròn về bội số 500 gần nhất. Anh Tinh chốt 21/10/2026. */
+function mpTinhPhi(tien){
+  const t = Number(tien) || 0;
+  if(t <= 0) return 0;
+  return Math.round(t * 0.01 / 500) * 500;
+}
+
+function mpHomQuaKey(){
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
+         + '-' + String(d.getDate()).padStart(2,'0');
+}
+function mpNgayVN(dateKey){
+  if(!dateKey) return '';
+  return new Date(dateKey + 'T00:00:00').toLocaleDateString('vi-VN');
+}
+
+function moTabMuaPhieu(){
+  const oNgay = document.getElementById('mpNgay');
+  if(oNgay && !oNgay.value) oNgay.value = mpHomQuaKey();
+  // V1.15.0 — mặc định khoảng ngày cho ba mục mới: đầu tháng tới hôm nay
+  const h = todayKey(), d1 = h.slice(0,8) + '01';
+  [['mpDotTu',d1],['mpDotDen',h],['mtTu',d1],['mtDen',h],['mbTu',d1],['mbDen',h]].forEach(([id,v])=>{
+    const e = document.getElementById(id); if(e && !e.value) e.value = v;
+  });
+  mpNapNguoiCan();
+  mxNapChon();
+  mpNapOCty();
+  mnGanKeoTha();
+  mpDoiMuc(mpMuc);
+}
+
+/* Danh sách người cân: lấy từ staffUsers, kèm mọi byUserId lạ còn sót
+   trong phiếu (người đã bị xoá tài khoản) để không giấu mất phiếu của họ. */
+function mpNapNguoiCan(){
+  const sel = document.getElementById('mpNguoiCan');
+  if(!sel) return;
+  const giu = sel.value;
+  const ds = staffUsers.map(u=>({ id:u.id, ten:u.name }));
+  const co = new Set(ds.map(x=>x.id));
+  mpPhieuNgay.forEach(w=>{
+    const id = String(w.byUserId || '');
+    if(id && !co.has(id)){ co.add(id); ds.push({ id, ten: (w.byUserName || 'Tài khoản đã xoá') + ' (cũ)' }); }
+  });
+  sel.innerHTML = '<option value="">— Tất cả —</option>'
+    + ds.map(x=>`<option value="${escapeHtml(x.id)}">${escapeHtml(x.ten)}</option>`).join('');
+  if(giu && co.has(giu)) sel.value = giu;
+}
+
+const MP_MUC = [['moi','mpMucMoi','mpSegMoi'], ['nhap','mpMucNhap','mpSegNhap'],
+                ['dot','mpMucDot','mpSegDot'], ['thu','mpMucThu','mpSegThu'],
+                ['bc','mpMucBc','mpSegBc']];
+function mpDoiMuc(muc){
+  mpMuc = muc;
+  MP_MUC.forEach(([k,idKhoi,idNut])=>{
+    const a = document.getElementById(idKhoi); if(a) a.classList.toggle('hidden', muc!==k);
+    const b = document.getElementById(idNut);  if(b) b.classList.toggle('active', muc===k);
+  });
+  if(muc==='moi')  mpDoiNgay();
+  if(muc==='nhap') renderMnBang();
+  if(muc==='dot')  renderMpDot();
+  if(muc==='thu')  renderMpThu();
+  if(muc==='bc')   renderMpBaoCao();
+}
+
+function mpDoiNgay(){
+  mpBoChon.clear();
+  const dateKey = document.getElementById('mpNgay').value || '';
+  document.getElementById('mpKetQua').innerHTML = '';
+  if(mpNgayDaTai !== dateKey){ mpPhieuNgay = []; mpNgayDaTai = ''; }
+  renderMuaPhieu();
+  mpTaiPhieuNgay(dateKey);
+}
+
+/* Tải phiếu gốc của ĐÚNG một ngày.
+   Nếu ngày đó đã nằm trong khoảng listener đang tải thì dùng luôn biến
+   weighings, khỏi tốn lượt đọc. Ngược lại hỏi thẳng server một lần. */
+async function mpTaiPhieuNgay(dateKey){
+  if(!dateKey) return;
+  if(mpNgayDaTai === dateKey) return;
+  const moc = mocTaiPhieu();
+  if(!moc || dateKey >= moc){
+    mpPhieuNgay = weighings.filter(w=>w.dateKey === dateKey);
+    mpNgayDaTai = dateKey; mpLoiTai = '';
+    mpNapNguoiCan(); renderMuaPhieu(); return;
+  }
+  if(!fsReady || !fsDb){ mpLoiTai = 'Chưa kết nối máy chủ — không tải được phiếu ngày cũ.'; renderMuaPhieu(); return; }
+  mpDangTai = true; mpLoiTai = ''; renderMuaPhieu();
+  try{
+    const snap = await gioiHanThoiGian(
+      fsDb.collection('weighings').where('dateKey','==',dateKey).get({ source:'server' }),
+      20000, 'tải phiếu ngày ' + dateKey);
+    mpPhieuNgay = snap.docs.map(d=>d.data());
+    mpNgayDaTai = dateKey;
+  }catch(e){
+    mpLoiTai = 'Không tải được phiếu ngày này: ' + ((e && e.message) ? e.message : e);
+    mpPhieuNgay = []; mpNgayDaTai = '';
+  }
+  mpDangTai = false;
+  mpNapNguoiCan();
+  renderMuaPhieu();
+}
+
+/* Dựng bảng. Công thức tiền công GIỮ NGUYÊN VĂN như dungBangTraCuu:
+     tiền ngày = tronNghin( tổng amount + (tăng ca ? round(tổng*0,1) : 0) ) */
+function mpDungBang(){
+  const dateKey  = (document.getElementById('mpNgay') || {}).value || '';
+  const nguoiCan = (document.getElementById('mpNguoiCan') || {}).value || '';
+  if(!dateKey || mpNgayDaTai !== dateKey){
+    return { dateKey, nguoiCan, rows:[], daChi:[], chuaTai:true };
+  }
+  const ngayTangCa = new Set(
+    overtimeDays.filter(o=>o && o.dateKey===dateKey).map(o=>String(o.employeeId)));
+
+  const cong = {};
+  const theoXuong = {};   // V1.16.0 — eid -> { mã xưởng: tiền }
+  mpPhieuNgay.forEach(w=>{
+    if(!w || w.dateKey !== dateKey) return;
+    if(nguoiCan && String(w.byUserId || '') !== nguoiCan) return;
+    const eid = String(w.employeeId || '');
+    if(!eid) return;
+    const tien = Number(w.amount) || 0;
+    cong[eid] = (cong[eid] || 0) + tien;
+    const x = mxCuaTaiKhoan(String(w.byUserId || ''));
+    if(!theoXuong[eid]) theoXuong[eid] = {};
+    theoXuong[eid][x] = (theoXuong[eid][x] || 0) + tien;
+  });
+
+  // Ai đã nhận tiền của đúng ngày này rồi — dù trả bằng máy quét hay mua phiếu
+  const daTra = new Set();
+  payments.forEach(p=>{
+    if(!p || !Array.isArray(p.paidDates)) return;
+    if(p.paidDates.indexOf(dateKey) >= 0) daTra.add(String(p.employeeId));
+  });
+
+  const rows = [], daChi = [];
+  Object.keys(cong).forEach(eid=>{
+    const base  = cong[eid];
+    const bonus = ngayTangCa.has(eid) ? Math.round(base * 0.1) : 0;
+    const tienCong = tronNghin(base + bonus);
+    if(tienCong <= 0) return;
+    const e = employees.find(x=>x.id === eid);
+    const phi = mpTinhPhi(tienCong);
+    /* V1.16.0 — xưởng của dòng này là xưởng của người cân nhiều tiền nhất
+       cho người đó trong ngày. Thực tế một công nhân chỉ cân ở một điểm.
+       Nếu dính hai xưởng thì ĐÁNH DẤU để cảnh báo chứ KHÔNG tự chia đôi:
+       chia đôi sẽ lệch làm tròn và sinh nguy cơ trả hai lần cùng một ngày. */
+    const tx  = theoXuong[eid] || {};
+    const dsX = Object.keys(tx).sort((a,b)=> tx[b] - tx[a]);
+    const r = { employeeId: eid, code: e ? e.code : '', name: e ? e.name : '(không rõ)',
+                tienCong, phi, thucNhan: tienCong - phi,
+                xuong: dsX[0] || '', nhieuXuong: dsX.length > 1 };
+    if(daTra.has(eid)) daChi.push(r); else rows.push(r);
+  });
+  const theoMa = (a,b)=> String(a.code).localeCompare(String(b.code), 'vi', { numeric:true });
+  rows.sort(theoMa); daChi.sort(theoMa);
+  return { dateKey, nguoiCan, rows, daChi, chuaTai:false };
+}
+
+function mpDaChon(rows){ return rows.filter(r=>!mpBoChon.has(r.employeeId)); }
+
+function mpTick(eid, batTat){
+  if(batTat) mpBoChon.delete(eid); else mpBoChon.add(eid);
+  renderMuaPhieu();
+}
+function mpTickHet(batTat){
+  const d = mpDungBang();
+  mpBoChon.clear();
+  if(!batTat) d.rows.forEach(r=>mpBoChon.add(r.employeeId));
+  renderMuaPhieu();
+}
+
+function renderMuaPhieu(){
+  const tin  = document.getElementById('mpBangTin');
+  const wrap = document.getElementById('mpBangWrap');
+  const tWrap= document.getElementById('mpTongWrap');
+  const dWrap= document.getElementById('mpDaChiTin');
+  const nut  = document.getElementById('mpNutIn');
+  if(!tin || !wrap) return;
+
+  const d = mpDungBang();
+
+  if(mpDangTai){
+    tin.innerHTML = `<div class="mp-tin">⏳ Đang tải phiếu ngày ${mpNgayVN(d.dateKey)}…</div>`;
+    wrap.innerHTML = ''; tWrap.innerHTML = ''; dWrap.innerHTML = '';
+    if(nut) nut.disabled = true;
+    return;
+  }
+  if(mpLoiTai){
+    tin.innerHTML = `<div class="mp-tin" style="background:#FDEAE7;border-color:#E8B4AD;color:#8E2018;">⚠️ ${escapeHtml(mpLoiTai)}</div>`;
+    wrap.innerHTML = ''; tWrap.innerHTML = ''; dWrap.innerHTML = '';
+    if(nut) nut.disabled = true;
+    return;
+  }
+  if(d.chuaTai){
+    tin.innerHTML = `<div class="mp-tin">Chọn ngày cân để xem danh sách.</div>`;
+    wrap.innerHTML = ''; tWrap.innerHTML = ''; dWrap.innerHTML = '';
+    if(nut) nut.disabled = true;
+    return;
+  }
+
+  /* V1.16.0 — lượt này dính mấy xưởng? Quyết định tờ in tách làm mấy tờ
+     và ô chọn công ty có còn tác dụng không. */
+  const chonRows = mpDaChon(d.rows);
+  const tapX = mpTapXuong(chonRows);
+  mpNhieuXuong = tapX.length > 1;
+  if(!mpNhieuXuong) mpDatLaiOCty(tapX[0] || '');
+  const oCty = document.getElementById('mpCty');
+  if(oCty){
+    oCty.disabled = mpNhieuXuong;
+    /* V1.16.1 — ô bị khoá mà vẫn hiện tên MỘT công ty thì dễ tưởng cả mấy tờ
+       đều in tên đó. Chuyển sang mục "— tự chọn theo xưởng —" cho đúng việc
+       thật sự xảy ra. mpCtyDangChon() đã tự lấy công ty theo xưởng khi
+       mpNhieuXuong nên không cần đổi gì thêm ở đường in. */
+    if(mpNhieuXuong) oCty.value = MP_CTY_AUTO;
+  }
+
+  const chuaGan = tapX.indexOf('') >= 0;
+  tin.innerHTML = `<div class="mp-tin">Đang xem tiền công <b>ngày ${mpNgayVN(d.dateKey)}</b>.
+      Chỉ hiện người <b>chưa nhận tiền của ngày này</b>.</div>`
+    + (mpNhieuXuong ? `<div class="mp-tin" style="background:#FFF8EC;border-color:#F0D9A8;color:#8A6418;margin-top:7px;">
+        Lượt này gồm <b>${tapX.length} xưởng</b> (${escapeHtml(tapX.map(x=>x||'chưa gán').join(', '))}).
+        Khi bấm In sẽ tách thành <b>${tapX.length} đợt</b>, in ${tapX.length} tờ, mỗi tờ đúng công ty của xưởng đó —
+        nên ô chọn công ty tạm khoá.</div>` : '')
+    + (chuaGan ? `<div class="mp-tin" style="background:#FDEAE7;border-color:#E8B4AD;color:#8E2018;margin-top:7px;">
+        Có phiếu của tài khoản <b>chưa gán xưởng</b>. Vào Cài đặt › Người dùng gán xưởng cho họ,
+        nếu không báo cáo sẽ gom vào nhóm “(chưa gán)”.</div>` : '');
+
+  if(d.rows.length === 0){
+    wrap.innerHTML = `<div class="empty-state">Không còn ai chưa nhận tiền của ngày ${mpNgayVN(d.dateKey)}</div>`;
+  }else{
+    const chonHet = d.rows.every(r=>!mpBoChon.has(r.employeeId));
+    const body = d.rows.map(r=>`
+      <tr>
+        <td style="text-align:center;"><input type="checkbox" ${mpBoChon.has(r.employeeId)?'':'checked'}
+            onchange="mpTick('${escapeHtml(r.employeeId)}', this.checked)"></td>
+        <td style="text-align:center;" class="font-mono">${escapeHtml(r.code)}</td>
+        <td style="text-align:left;">${escapeHtml(r.name)}</td>
+        <td>${formatNumber(r.tienCong)}</td>
+        <td style="color:var(--amber);">${formatNumber(r.phi)}</td>
+        <td style="color:var(--moss);font-weight:600;">${formatNumber(r.thucNhan)}</td>
+      </tr>`).join('');
+    wrap.innerHTML = `
+      <table class="debt-report-table">
+        <thead><tr>
+          <th style="width:34px;text-align:center;"><input type="checkbox" ${chonHet?'checked':''} onchange="mpTickHet(this.checked)"></th>
+          <th style="width:54px;text-align:center;">Mã</th>
+          <th style="text-align:left;">Tên</th>
+          <th>Tiền công</th><th>Phí</th><th>Thực nhận</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>`;
+  }
+
+  dWrap.innerHTML = d.daChi.length
+    ? `<div class="mp-tin" style="background:#FFF8EC;border-color:#F0D9A8;color:#8A6418;margin-top:8px;">
+         ⚠️ <b>${d.daChi.length} người đã nhận tiền ngày này</b> — đã tự loại khỏi danh sách.</div>`
+    : '';
+
+  const chon = mpDaChon(d.rows);
+  const tongCong = chon.reduce((s,r)=>s+r.tienCong, 0);
+  const tongPhi  = chon.reduce((s,r)=>s+r.phi, 0);
+  tWrap.innerHTML = `
+    <div class="card" style="margin-top:8px;background:#EEF4FB;border-color:#C5D9F0;">
+      <div class="mp-dong"><span>Đã chọn</span><b>${chon.length} / ${d.rows.length} người</b></div>
+      <div class="mp-dong"><span>Tổng tiền công</span><b>${formatNumber(tongCong)}</b></div>
+      <div class="mp-dong"><span>Tổng phí thu</span><b style="color:var(--amber);">${formatNumber(tongPhi)}</b></div>
+      <div class="mp-dong" style="border-top:1px dashed #A9C6E8;margin-top:5px;padding-top:6px;font-size:15px;font-weight:700;">
+        <span>Tiền mặt phải đưa</span><b style="color:var(--moss);">${formatNumber(tongCong - tongPhi)}</b></div>
+    </div>`;
+  if(nut) nut.disabled = (chon.length === 0);
+}
+
+/* Mã đợt: MP-YYYYMMDD-NN, đếm từ chính payments nên không cần kho mới. */
+function mpMaDot(){
+  const d = new Date();
+  const tien = 'MP-' + d.getFullYear() + String(d.getMonth()+1).padStart(2,'0')
+             + String(d.getDate()).padStart(2,'0') + '-';
+  let max = 0;
+  payments.forEach(p=>{
+    const m = String((p && p.muaPhieuId) || '');
+    if(m.indexOf(tien) === 0){
+      const n = parseInt(m.slice(tien.length), 10);
+      if(!isNaN(n) && n > max) max = n;
+    }
+  });
+  return tien + String(max + 1).padStart(2,'0');
+}
+
+function mpInVaChi(){
+  if(Date.now() < mpKhoaIn) return;              // lớp 1: khoá 3 giây
+  if(!can('pay')){ alert('Tài khoản của bạn không có quyền chi tiền'); return; }
+  const d = mpDungBang();
+  if(d.chuaTai){ alert('Chưa tải xong phiếu của ngày này'); return; }
+  const chon = mpDaChon(d.rows);
+  if(!chon.length){ alert('Chưa chọn ai để mua phiếu'); return; }
+  mpKhoaIn = Date.now() + 3000;
+
+  /* V1.16.0 — TÁCH THEO XƯỞNG.
+     App phục vụ nhiều xưởng (X1, X2, X7). Một đợt dính hai xưởng thì báo
+     cáo không tách ra được và tờ in sai pháp nhân. Nên gom theo xưởng,
+     mỗi xưởng một đợt riêng, rồi in MỘT LẦN ra nhiều tờ. */
+  const nhom = {};
+  chon.forEach(r=>{ const k = r.xuong || ''; (nhom[k] = nhom[k] || []).push(r); });
+  const cacXuong = Object.keys(nhom).sort();
+
+  const homNay = todayKey();
+  const ngayVN = mpNgayVN(d.dateKey);
+  const toIn = [], tenDot = [];
+  let tongTatCa = 0, tongNguoi = 0;
+
+  cacXuong.forEach(xg=>{
+    const ds  = nhom[xg];
+    const maDot = mpMaDot();                 // đếm lại mỗi vòng -> mã không trùng
+    ds.forEach(r=>{
+      const pc = {
+        id: uid(), employeeId: r.employeeId, dateKey: homNay, type: 'wage',
+        // amount = ĐỦ tiền công gốc để công nợ về đúng 0. Phí lưu riêng.
+        amount: r.tienCong,
+        note: 'Mua phiếu ngày ' + ngayVN + ' — phí ' + formatNumber(r.phi)
+              + 'đ, thực nhận ' + formatNumber(r.thucNhan) + 'đ (' + maDot + ')',
+        paidDates: [d.dateKey],
+        chiTietNgay: [{ dateKey: d.dateKey, amount: r.tienCong }],
+        createdAt: Date.now(),
+        byUserId: currentUser ? currentUser.id : '',
+        byUserName: currentUser ? currentUser.name : '',
+        deviceId: thisDeviceId(),
+        muaPhieuId: maDot, phi: r.phi
+      };
+      payments.push(pc);
+      ghiNgay('payments', pc);
+    });
+    const tC = ds.reduce((s,r)=>s+r.tienCong, 0);
+    const tP = ds.reduce((s,r)=>s+r.phi, 0);
+    tongTatCa += tC; tongNguoi += ds.length;
+    // Bản tổng đợt. Chi tiết người KHÔNG lưu ở đây — đã có sẵn trong payments.
+    mpGhiDot({
+      id: maDot, ma: maDot, loai: 'noibo', xuong: xg,
+      tenCty: mpCtyDangChon(xg), ngayCan: d.dateKey,
+      soNguoi: ds.length, tongTien: tC, tongPhi: tP, tongNhan: tC - tP, tenFile: '',
+      createdAt: Date.now(),
+      byUserId: currentUser ? currentUser.id : '',
+      byUserName: currentUser ? currentUser.name : '',
+      daThu: false, ngayThu: '', ghiChuThu: '', nguoiThu: ''
+    });
+    tenDot.push(maDot);
+    toIn.push({ ma:maDot, xuong:xg, ngayCan:d.dateKey, tenCty:mpCtyDangChon(xg), rows:ds });
+  });
+
+  logActivity('Mua phiếu', tenDot.join(', ') + ' — ' + tongNguoi + ' người, '
+    + formatNumber(tongTatCa) + ' đ');
+  saveAll(true);
+  mpBoChon.clear();
+  renderMuaPhieu();
+  renderDebtTab();
+  document.getElementById('mpKetQua').innerHTML =
+    `<span style="color:var(--moss);font-weight:600;">✅ Đã lập ${toIn.length > 1 ? toIn.length + ' đợt' : 'đợt'}
+     ${escapeHtml(tenDot.join(', '))} cho ${tongNguoi} người.</span>
+     <span class="muted"> Cần in lại thì vào mục "Đã mua".</span>`;
+  mpInNhieuTo(toIn, 'that');
+}
+
+/* IN THỬ — chỉ xem trước, KHÔNG ghi phiếu chi, KHÔNG đụng công nợ.
+   Tờ in ra có đóng dấu đỏ để không ai cầm nhầm đi phát tiền. */
+function mpInThu(){
+  const d = mpDungBang();
+  if(d.chuaTai){ alert('Chưa tải xong phiếu của ngày này'); return; }
+  const chon = mpDaChon(d.rows);
+  if(!chon.length){ alert('Chưa chọn ai để xem thử'); return; }
+  mpInA4('', d.dateKey, d.nguoiCan, chon, 'thu');
+}
+
+/* XUẤT EXCEL — cũng chỉ đọc, KHÔNG đụng công nợ.
+   Dùng SheetJS đã có sẵn trong app, không nạp thêm thư viện nào:
+   ba máy cân có lúc mạng chập chờn, thêm thư viện tải từ mạng là
+   thêm một chỗ hỏng đúng lúc cần dùng. */
+function mpXuatExcel(){
+  if(!requirePerm('exportExcel')) return;
+  const d = mpDungBang();
+  if(d.chuaTai){ alert('Chưa tải xong phiếu của ngày này'); return; }
+  const chon = mpDaChon(d.rows);
+  if(!chon.length){ alert('Không có dòng nào để xuất'); return; }
+  const u = d.nguoiCan ? staffUsers.find(x=>x.id === d.nguoiCan) : null;
+  const aoa = [];
+  if(companyInfo.name)    aoa.push([companyInfo.name]);
+  if(companyInfo.address) aoa.push([companyInfo.address]);
+  if(companyInfo.phone)   aoa.push(['ĐT: ' + companyInfo.phone]);
+  aoa.push([]);
+  aoa.push(['BẢNG TRẢ TIỀN CÔNG NGÀY ' + mpNgayVN(d.dateKey)]);
+  aoa.push(['Người cân: ' + (u ? u.name : 'Tất cả') + ' · Phí mua phiếu 1%']);
+  aoa.push([]);
+  aoa.push(['STT','Mã','Họ và tên','Tiền công','Phí 1%','Thực nhận','Ký nhận']);
+  chon.forEach((r,i)=> aoa.push([i+1, r.code, r.name, r.tienCong, r.phi, r.thucNhan, '']));
+  const tongCong = chon.reduce((s,r)=>s+r.tienCong, 0);
+  const tongPhi  = chon.reduce((s,r)=>s+r.phi, 0);
+  aoa.push(['', '', 'TỔNG CỘNG — ' + chon.length + ' người', tongCong, tongPhi, tongCong - tongPhi, '']);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:5},{wch:9},{wch:26},{wch:13},{wch:10},{wch:13},{wch:14}];
+  // Định dạng số có phân nhóm nghìn cho ba cột tiền
+  const dong0 = aoa.length - chon.length - 1;          // dòng đầu tiên của dữ liệu
+  for(let i = 0; i <= chon.length; i++){
+    ['D','E','F'].forEach(cot=>{
+      const o = ws[cot + (dong0 + i + 1)];
+      if(o && typeof o.v === 'number') o.z = '#,##0';
+    });
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Mua phieu');
+  XLSX.writeFile(wb, 'mua-phieu-' + d.dateKey + '.xlsx');
+}
+
+/* =====================================================================
+   V1.15.0 — ĐỢT MUA PHIẾU: NỘI BỘ + NHẬP TỪ EXCEL
+   Đọc mục V1.15.0 trong phần bàn giao đầu file trước khi sửa.
+   ===================================================================== */
+/* V1.16.0 — BA CÔNG TY, SÁU XƯỞNG.
+   App Cân Tôm phục vụ X1, X2, X7 (người cân là tài khoản trong app).
+   X3, X4, TK1 gửi file Excel.
+   Tên công ty CHỈ LÀ MẶC ĐỊNH theo xưởng — lúc in đổi được, vì có khi
+   xưởng này in dưới pháp nhân khác. */
+const MP_CTY_MAC_DINH = [
+  { ma:'CBT', ten:'CTY TNHH MTV THỦY SẢN CHÂU BÁ THẢO',
+    diaChi:'Ấp Bờ Cảng, Xã Long Điền, Tỉnh Cà Mau', dienThoai:'02913.70.6666' },
+  { ma:'CC',  ten:'CTY TNHH XNK THỦY SẢN CHÂU CẨM',  diaChi:'', dienThoai:'' },
+  { ma:'TK',  ten:'CTY TNHH XNK THỦY SẢN TẤN KHỞI',
+    diaChi:'Khóm 2, Phường 1, Thị xã Giá Rai, tỉnh Bạc Liêu', dienThoai:'' }
+];
+const MP_XUONG_MAC_DINH = [
+  { ma:'X1',  ten:'Xưởng 1',     cty:'CBT', noiBo:true  },
+  { ma:'X2',  ten:'Xưởng 2',     cty:'CBT', noiBo:true  },
+  { ma:'X7',  ten:'Xưởng 7',     cty:'CBT', noiBo:true  },
+  { ma:'X3',  ten:'Xưởng 3',     cty:'CC',  noiBo:false },
+  { ma:'X4',  ten:'Xưởng 4',     cty:'TK',  noiBo:false },
+  { ma:'TK1', ten:'Tấn Khởi 1',  cty:'TK',  noiBo:false }
+];
+function mcDanhSach(){
+  const ds = (appOptions && Array.isArray(appOptions.congTyList) && appOptions.congTyList.length)
+             ? appOptions.congTyList : MP_CTY_MAC_DINH;
+  return ds.filter(x=>x && x.ma);
+}
+function mcTim(ma){ return mcDanhSach().find(x=>x.ma === ma) || null; }
+function mcTheoTen(ten){ return mcDanhSach().find(x=>x.ten === ten) || null; }
+
+function mxDanhSach(){
+  const ds = (appOptions && Array.isArray(appOptions.xuongList) && appOptions.xuongList.length)
+             ? appOptions.xuongList : MP_XUONG_MAC_DINH;
+  return ds.filter(x=>x && x.ma);
+}
+function mxTim(ma){ return mxDanhSach().find(x=>x.ma === ma) || null; }
+function mxTen(ma){ const x = mxTim(ma); return x ? (x.ma + (x.ten ? ' — ' + x.ten : '')) : (ma || '(chưa rõ)'); }
+/* Các mục cho ô chọn xưởng trong hồ sơ tài khoản.
+   Chưa gán thì CHỌN SẴN gợi ý theo đuôi tên, kèm chữ "(gợi ý)" để người
+   dùng biết đó là máy đoán và phải bấm Lưu mới thành thật. */
+function mxOptionCho(u){
+  const daGan = (u && u.xuong) ? String(u.xuong) : '';
+  const goiY  = daGan ? '' : mxGoiYTuTen(u && u.name);
+  const chon  = daGan || goiY;
+  return '<option value=""' + (chon ? '' : ' selected') + '>— chưa gán —</option>'
+    + mxDanhSach().map(x=>{
+        const nhan = mxTen(x.ma) + ((!daGan && goiY === x.ma) ? '   (gợi ý theo tên)' : '');
+        return `<option value="${escapeHtml(x.ma)}"${chon === x.ma ? ' selected' : ''}>${escapeHtml(nhan)}</option>`;
+      }).join('');
+}
+function mxLaNoiBo(ma){ const x = mxTim(ma); return !!(x && x.noiBo); }
+/* Tên công ty mặc định của một xưởng — chỉ gợi ý, lúc in vẫn đổi được */
+function mcTenTheoXuong(maXuong){
+  const x = mxTim(maXuong);
+  const c = x ? mcTim(x.cty) : null;
+  return c ? c.ten : (companyInfo.name || '');
+}
+
+/* Xưởng của một tài khoản người cân.
+   LẤY TỪ Ô ĐÃ GÁN trong hồ sơ, KHÔNG đoán theo tên: chỉ cần ai sửa tên
+   tài khoản là đợt gán sai xưởng, mà sai thì báo cáo tiền sai theo.
+   Chưa gán -> trả '' -> báo cáo gom vào nhóm "(chưa gán xưởng)". */
+function mxCuaTaiKhoan(userId){
+  const u = staffUsers.find(x=>x && x.id === userId);
+  return (u && u.xuong) ? String(u.xuong) : '';
+}
+/* Gợi ý xưởng từ đuôi tên tài khoản ("Nguyễn Luyện X1" -> X1).
+   CHỈ để điền sẵn ô cho người dùng bấm duyệt, KHÔNG tự áp vào dữ liệu. */
+function mxGoiYTuTen(ten){
+  const m = String(ten||'').trim().match(/(X\s?\d{1,2}|TK\s?\d{1,2})\s*$/i);
+  if(!m) return '';
+  const g = m[1].replace(/\s+/g,'').toUpperCase();
+  return mxDanhSach().some(x=>x.ma === g) ? g : '';
+}
+
+/* ---- Ô CHỌN CÔNG TY IN TRÊN TỜ ----
+   QUY TẮC, chỉ một câu: ô chọn là thứ quyết định, TRỪ KHI một lượt in
+   dính nhiều xưởng — lúc đó mỗi tờ lấy công ty mặc định của xưởng mình,
+   vì một ô không thể đúng cho ba pháp nhân cùng lúc.
+   Đổi người cân thì ô tự nhảy về mặc định của xưởng đó. */
+/* V1.16.1 — mục giả "tự chọn theo xưởng", CHỈ cho ô mpCty của mục Mua mới.
+   Mục Nhập Excel (mnCtyChon) không có vì ở đó người dùng phải chọn thật. */
+const MP_CTY_AUTO     = '__auto__';
+const MP_CTY_AUTO_OPT = `<option value="${MP_CTY_AUTO}">— tự chọn theo xưởng —</option>`;
+function mpNapOCty(){
+  const opt = mcDanhSach().map(c=>`<option value="${escapeHtml(c.ten)}">${escapeHtml(c.ten)}</option>`).join('');
+  ['mpCty','mnCtyChon'].forEach(id=>{
+    const s = document.getElementById(id); if(!s) return;
+    const giu = s.value;
+    s.innerHTML = (id === 'mpCty' ? MP_CTY_AUTO_OPT : '') + opt;
+    if(giu === MP_CTY_AUTO && id === 'mpCty') s.value = MP_CTY_AUTO;
+    else if(giu && mcTheoTen(giu)) s.value = giu;
+    else if(id === 'mpCty' && !giu) s.selectedIndex = 1;   // mặc định vẫn là công ty đầu
+  });
+}
+/* Tập xưởng của lượt mua đang xem */
+function mpTapXuong(rows){
+  return [...new Set((rows||[]).map(r=>r.xuong || ''))];
+}
+/* Đổi người cân -> đặt lại ô công ty về mặc định của xưởng đó */
+function mpDatLaiOCty(xuong){
+  const o = document.getElementById('mpCty');
+  if(!o) return;
+  const t = mcTenTheoXuong(xuong);
+  if(t && mcTheoTen(t)) o.value = t;
+  /* V1.16.1 — xưởng này chưa khai công ty: đừng để ô kẹt ở mục giả
+     "— tự chọn theo xưởng —" trong khi ô đang MỞ cho người dùng bấm. */
+  else if(o.value === MP_CTY_AUTO && o.options.length > 1) o.selectedIndex = 1;
+}
+/* Tên công ty in cho một xưởng trong lượt hiện tại */
+function mpCtyDangChon(maXuong){
+  const o = document.getElementById('mpCty');
+  if(mpNhieuXuong) return mcTenTheoXuong(maXuong) || companyInfo.name || '';
+  if(o && o.value && mcTheoTen(o.value)) return o.value;
+  return mcTenTheoXuong(maXuong) || companyInfo.name || '';
+}
+let mpNhieuXuong = false;   // lượt đang xem có dính nhiều xưởng không
+
+/* Nạp mọi ô chọn xưởng. Gồm cả xưởng chỉ còn trong dữ liệu cũ mà đã bị gỡ
+   khỏi danh sách — nếu không, đợt của xưởng đó biến mất khỏi báo cáo. */
+function mxNapChon(){
+  const co = new Set(mxDanhSach().map(x=>x.ma));
+  const la = [];
+  muaPhieuDot.forEach(d=>{ if(d && d.xuong && !co.has(d.xuong)){ co.add(d.xuong); la.push(d.xuong); } });
+  const opt = mxDanhSach().map(x=>`<option value="${escapeHtml(x.ma)}">${escapeHtml(mxTen(x.ma))}</option>`).join('')
+            + la.map(m=>`<option value="${escapeHtml(m)}">${escapeHtml(m)} (đã gỡ)</option>`).join('');
+  ['mpDotXuong','mtXuong','mbXuong'].forEach(id=>{
+    const s = document.getElementById(id); if(!s) return;
+    const giu = s.value;
+    s.innerHTML = '<option value="">— Tất cả xưởng —</option>' + opt;
+    if(giu) s.value = giu;
+  });
+  const sn = document.getElementById('mnXuong');
+  if(sn){
+    const giu = sn.value;
+    sn.innerHTML = mxDanhSach().filter(x=>!x.noiBo)
+      .map(x=>`<option value="${escapeHtml(x.ma)}">${escapeHtml(mxTen(x.ma))}</option>`).join('');
+    if(giu) sn.value = giu;
+  }
+}
+
+/* Ghi/cập nhật bản tổng một đợt — dùng chung cho đợt nội bộ và nhập ngoài */
+function mpGhiDot(dot){
+  const i = muaPhieuDot.findIndex(x=>x && x.id === dot.id);
+  if(i >= 0) muaPhieuDot[i] = dot; else muaPhieuDot.push(dot);
+  ghiNgay('muaPhieuDot', dot);
+}
+
+function mpLocDot(tu, den, xuong){
+  return muaPhieuDot.filter(d=>{
+    if(!d || !d.ma) return false;
+    if(tu  && (d.ngayCan || '') < tu)  return false;
+    if(den && (d.ngayCan || '') > den) return false;
+    if(xuong && d.xuong !== xuong) return false;
+    return true;
+  }).sort((a,b)=> (b.ngayCan||'').localeCompare(a.ngayCan||'') || (b.createdAt||0)-(a.createdAt||0));
+}
+
+function mpNhanXuong(ma){
+  const mau = mxLaNoiBo(ma) ? 'background:#E6EFFA;color:var(--blue-dk);'
+                            : 'background:#FDF2E3;color:#8A6418;';
+  return `<span style="${mau}font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;">${escapeHtml(ma || '(chưa gán)')}</span>`;
+}
+
+function renderMpDot(){
+  const wrap = document.getElementById('mpDotWrap');
+  if(!wrap) return;
+  const tu    = (document.getElementById('mpDotTu')   ||{}).value || '';
+  const den   = (document.getElementById('mpDotDen')  ||{}).value || '';
+  const xuong = (document.getElementById('mpDotXuong')||{}).value || '';
+  const ds = mpLocDot(tu, den, xuong);
+  if(!ds.length){ wrap.innerHTML = `<div class="empty-state">Không có đợt nào trong khoảng này</div>`; return; }
+  const xoaDuoc = can('muaPhieuXoa');
+  wrap.innerHTML = ds.map(g=>`
+    <div class="card" style="margin-bottom:8px;display:flex;align-items:center;gap:9px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:13.5px;">${escapeHtml(g.ma)}</div>
+        <div class="muted" style="font-size:12px;margin-top:2px;">
+          Ngày cân ${mpNgayVN(g.ngayCan)} · ${formatNumber(g.soNguoi)} người ·
+          ${formatNumber(g.tongTien)} · phí ${formatNumber(g.tongPhi)}
+          ${g.daThu ? ' · <span style="color:var(--moss);font-weight:600;">đã thu</span>' : ''}
+        </div>
+      </div>
+      ${mpNhanXuong(g.xuong)}
+      <button class="btn btn-outline btn-sm" onclick="mpInLai('${escapeHtml(g.ma)}')">In lại</button>
+      ${xoaDuoc ? `<button class="btn btn-sm" style="background:#fff;color:var(--rust);border:1px solid #E8B4AD;"
+          onclick="mpXoaDot('${escapeHtml(g.ma)}')">Xoá</button>` : ''}
+    </div>`).join('');
+}
+
+function mpXoaDot(ma){
+  if(!requirePerm('muaPhieuXoa')) return;
+  const g = muaPhieuDot.find(x=>x && x.ma === ma);
+  if(!g){ alert('Không tìm thấy đợt ' + ma); return; }
+  if(g.loai === 'noibo'){
+    alert('Đợt nội bộ (' + ma + ') phải xoá từng phiếu chi bên tab Công nợ.\n\n'
+        + 'Xoá ở đây chỉ mất bản tổng, phiếu chi vẫn còn — công nợ sẽ sai.');
+    return;
+  }
+  if(!confirm('XOÁ đợt ' + ma + '?\n\n' + mxTen(g.xuong) + ' · ngày cân ' + mpNgayVN(g.ngayCan)
+      + '\n' + formatNumber(g.soNguoi) + ' người · ' + formatNumber(g.tongTien) + ' đ'
+      + '\n\nBáo cáo sẽ không còn tính đợt này.\nNếu đã phát tiền rồi thì ĐỪNG xoá.')) return;
+  muaPhieuDot = muaPhieuDot.filter(x=>x.ma !== ma);
+  xoaNgay('muaPhieuDot', ma);
+  if(fsReady && fsDb) fsDb.collection('muaPhieuCT').doc(ma).delete().catch(()=>{});
+  logActivity('Xoá đợt mua phiếu', ma + ' — ' + formatNumber(g.tongTien) + ' đ');
+  saveAll(true);
+  renderMpDot();
+}
+
+/* In lại: dựng lại từ CHÍNH phiếu chi đã lưu, không tạo phiếu mới,
+   không đụng công nợ. Số tiền vì vậy luôn đúng như lúc phát tiền,
+   kể cả khi sau này phiếu cân của ngày đó bị sửa. */
+async function mpInLai(maDot){
+  const g = muaPhieuDot.find(x=>x && x.ma === maDot);
+
+  /* --- Đợt NHẬP NGOÀI: chi tiết nằm ở kho riêng, tải theo yêu cầu --- */
+  if(g && g.loai === 'ngoai'){
+    let rows = mnCacheCT[maDot];
+    if(!rows){
+      if(!fsReady || !fsDb){ alert('Chưa kết nối máy chủ — không lấy được chi tiết đợt này.'); return; }
+      try{
+        const sn = await gioiHanThoiGian(
+          fsDb.collection('muaPhieuCT').doc(maDot).get(), 15000, 'tải chi tiết đợt ' + maDot);
+        if(!sn.exists){ alert('Không tìm thấy chi tiết của đợt ' + maDot); return; }
+        rows = (sn.data() || {}).rows || [];
+        mnCacheCT[maDot] = rows;
+      }catch(e){ alert('Không tải được chi tiết đợt ' + maDot + '\n' + ((e&&e.message)||e)); return; }
+    }
+    mpInA4Ngoai(g, rows, 'lai');
+    return;
+  }
+
+  /* --- Đợt NỘI BỘ: dựng lại từ chính phiếu chi đã lưu --- */
+  const ds = payments.filter(p=>p && p.muaPhieuId === maDot);
+  if(!ds.length){ alert('Không tìm thấy đợt ' + maDot); return; }
+  const ngayCan = (ds[0].paidDates && ds[0].paidDates[0]) || '';
+  const rows = ds.map(p=>{
+    const e   = employees.find(x=>x.id === p.employeeId);
+    const phi = Number(p.phi) || 0;
+    const am  = Number(p.amount) || 0;
+    return { employeeId:p.employeeId, code: e?e.code:'', name: e?e.name:'(không rõ)',
+             tienCong: am, phi, thucNhan: am - phi };
+  }).sort((a,b)=> String(a.code).localeCompare(String(b.code), 'vi', { numeric:true }));
+  mpInA4(maDot, ngayCan, '', rows, 'lai');
+}
+
+/* kieu: 'that' = tờ chính thức vừa trừ nợ
+         'lai'  = in lại một đợt đã lập
+         'thu'  = XEM THỬ, chưa trừ gì — phải đóng dấu rõ để không ai
+                  cầm nhầm tờ này đi phát tiền mà hệ thống không biết */
+/* =====================================================================
+   V1.16.0 — MỘT KHUÔN TỜ A4 DUY NHẤT cho mọi đường in.
+   Trước đây có hai bản sao (đợt nội bộ và đợt nhập ngoài) gần giống nhau —
+   sửa một chỗ quên chỗ kia. Nay gộp làm một.
+     dot  = { ma, xuong, ngayCan, tenCty, nguoiCanTen }
+     rows = [{ code|ma, name|ten, tienCong|tien, phi }]
+     kieu = 'that' | 'lai' | 'thu'
+   ===================================================================== */
+function mpToA4(dot, rows, kieu){
+  const lay = (r,a,b) => (r[a] !== undefined ? r[a] : r[b]);
+  const ds = rows.map(r=>({
+    ma:   String(lay(r,'code','ma') || ''),
+    ten:  String(lay(r,'name','ten') || ''),
+    tien: Number(lay(r,'tienCong','tien')) || 0,
+    phi:  Number(r.phi) || 0
+  })).sort((a,b)=> a.ma.localeCompare(b.ma, 'vi', { numeric:true }));
+  const tC = ds.reduce((s,x)=>s+x.tien, 0);
+  const tP = ds.reduce((s,x)=>s+x.phi, 0);
+  const tN = tC - tP;
+  const n = new Date(), p2 = v=>String(v).padStart(2,'0');
+  const gio = n.toLocaleDateString('vi-VN') + ' ' + p2(n.getHours()) + ':' + p2(n.getMinutes());
+  const cty = dot.tenCty || '';
+  const c   = mcTheoTen(cty);
+  const dc  = c ? c.diaChi : (companyInfo.address || '');
+  const dt  = c ? c.dienThoai : (companyInfo.phone || '');
+
+  /* V1.16.1 — Ô XƯỞNG góc phải trên thay cho chữ nhỏ lẫn trong dòng chi tiết.
+     Dùng mxTen() để ra "XƯỞNG 1" / "TẤN KHỞI 1" chứ không phải mã X1 / TK1.
+     Đợt không có xưởng (đợt cũ, hoặc người cân chưa gán xưởng) thì đóng dấu
+     "CHƯA GÁN" viền đứt đỏ — nhìn là biết tờ này còn phải xử lý. */
+  /* mxTen() trả "X1 — Xưởng 1"; ô góc chỉ cần phần tên cho ngắn, không thì
+     "TK1 — TẤN KHỞI 1" dài quá, đè vào tên công ty ở giữa. */
+  const xgDay  = dot.xuong ? (mxTen(dot.xuong) || String(dot.xuong)) : '';
+  const xgTen  = xgDay.indexOf(' — ') >= 0 ? xgDay.split(' — ')[1] : xgDay;
+  const oXuong = xgTen
+    ? `<div class="xg-box">${escapeHtml(xgTen)}</div>`
+    : `<div class="xg-box xg-chua">CHƯA GÁN</div>`;
+
+  const chiTiet = [];
+  if(dot.nguoiCanTen) chiTiet.push('Người cân: ' + escapeHtml(dot.nguoiCanTen));
+  chiTiet.push('Phí mua phiếu 1%');
+  if(kieu !== 'thu' && dot.ma) chiTiet.push('Số đợt: <b>' + escapeHtml(dot.ma) + '</b>');
+  if(kieu === 'lai') chiTiet.push('<b>BẢN IN LẠI</b>');
+
+  return `
+    <div class="report-print-page">
+      <div class="report-print-header">
+        ${oXuong}
+        ${cty ? `<div class="co-name">${escapeHtml(cty)}</div>` : ''}
+        ${dc  ? `<div class="co-sub">${escapeHtml(dc)}</div>` : ''}
+        ${dt  ? `<div class="co-sub">ĐT: ${escapeHtml(dt)}</div>` : ''}
+        <h2>BẢNG TRẢ TIỀN CÔNG NGÀY ${mpNgayVN(dot.ngayCan)}</h2>
+        <div class="period">${chiTiet.join(' · ')}</div>
+      </div>
+      ${kieu === 'thu' ? `<div style="border:2px solid #C0392B;color:#C0392B;font-weight:700;
+        text-align:center;padding:7px;margin:10px 0 4px;letter-spacing:1px;font-size:13px;">
+        BẢN XEM THỬ — CHƯA LƯU, KHÔNG DÙNG ĐỂ PHÁT TIỀN</div>` : ''}
+      <table class="report-print-table">
+        <thead><tr>
+          <th style="text-align:center;width:36px;">STT</th>
+          <th style="text-align:center;width:84px;">Mã số</th>
+          <th style="text-align:left;">Họ và tên</th>
+          <th style="width:86px;">Tiền công</th><th style="width:66px;">Phí 1%</th>
+          <th style="width:88px;">Thực nhận</th><th style="width:92px;">Ký nhận</th>
+        </tr></thead>
+        <tbody>${ds.map((x,i)=>`<tr>
+            <td style="text-align:center;">${i+1}</td>
+            <td style="text-align:center;">${escapeHtml(x.ma)}</td>
+            <td style="text-align:left;">${escapeHtml(x.ten)}</td>
+            <td>${formatNumber(x.tien)}</td>
+            <td>${formatNumber(x.phi)}</td>
+            <td>${formatNumber(x.tien - x.phi)}</td>
+            <td></td></tr>`).join('')}
+          <tr class="total-row">
+            <td colspan="3">TỔNG CỘNG — ${ds.length} người</td>
+            <td>${formatNumber(tC)}</td><td>${formatNumber(tP)}</td><td>${formatNumber(tN)}</td><td></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="font-size:11.5px;margin-top:9px;font-style:italic;">
+        <b style="font-style:normal;">Bằng chữ:</b> ${docSoThanhChu(tN)} đồng chẵn.</div>
+      <div class="report-print-footer">
+        <div style="width:33%;">Người lập biểu<br><br><br>_____________</div>
+        <div style="width:33%;">Thủ quỹ<br><br><br>_____________</div>
+        <div style="width:33%;">Giám đốc<br><br><br>_____________</div>
+      </div>
+      <div style="margin-top:14px;font-size:9.5px;color:#888;text-align:right;">
+        ${kieu === 'thu' ? 'BẢN XEM THỬ' : escapeHtml(dot.ma || '')} · in ${gio}</div>
+    </div>`;
+}
+
+/* In NHIỀU tờ trong MỘT lệnh in. Trình duyệt chỉ mở một hộp thoại,
+   máy in nhả ra lần lượt từng tờ. Mỗi tờ sang trang mới. */
+function mpInNhieuTo(ds, kieu){
+  if(!ds || !ds.length) return;
+  document.getElementById('printArea').innerHTML = ds.map((d,i)=>
+    `<div${i < ds.length-1 ? ' style="page-break-after:always;"' : ''}>${mpToA4(d, d.rows, kieu)}</div>`
+  ).join('');
+  window.print();
+}
+
+/* Giữ tên cũ để các chỗ gọi sẵn không phải đổi */
+function mpInA4(maDot, ngayCan, nguoiCanId, rows, kieu){
+  const u = nguoiCanId ? staffUsers.find(x=>x.id === nguoiCanId) : null;
+  const xg = u ? mxCuaTaiKhoan(u.id) : '';
+  mpInNhieuTo([{ ma:maDot, xuong:xg, ngayCan, tenCty: mpCtyDangChon(xg),
+                 nguoiCanTen: u ? u.name : '', rows }], kieu);
+}
+
+/* =====================================================================
+   V1.15.0 — MỤC NHẬP EXCEL
+   Đọc file bảng lương của xưởng khác, tính phí, lưu thành một đợt.
+   KHÔNG tạo nhân viên giả, KHÔNG tạo phiếu cân giả, KHÔNG đụng công nợ:
+   người trong file này không có hồ sơ trong app nên chẳng có gì để trừ.
+   ===================================================================== */
+let mnDS = [];            // [{ma,ten,tien,phi,thucNhan,chon}]
+let mnCty = '';           // tên công ty đọc từ file
+let mnTenFile = '';
+let mnNgayFile = '';
+let mnCacheCT = {};       // maDot -> rows, để in lại khỏi tải lại
+
+function mnBoDau(s){
+  return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/đ/g,'d').replace(/Đ/g,'D').toUpperCase().replace(/[^A-Z0-9]/g,'');
+}
+function mnBaoLoi(html){
+  const e = document.getElementById('mnTin');
+  if(e) e.innerHTML = '<div class="mp-tin" style="background:#FDEAE7;border-color:#E8B4AD;color:#8E2018;margin-top:9px;">' + html + '</div>';
+}
+
+/* Kéo thả file vào ô — gắn một lần, bỏ qua nếu chưa có ô (trang chưa dựng) */
+function mnGanKeoTha(){
+  const o = document.getElementById('mpNhapTha');
+  if(!o || o.dataset.ganRoi) return;
+  o.dataset.ganRoi = '1';
+  ['dragenter','dragover'].forEach(e=>o.addEventListener(e, ev=>{
+    ev.preventDefault(); o.style.borderColor = 'var(--blue)'; o.style.background = '#EEF4FB'; }));
+  ['dragleave','drop'].forEach(e=>o.addEventListener(e, ev=>{
+    ev.preventDefault(); o.style.borderColor = '#B9CCE4'; o.style.background = '#F8FAFD'; }));
+  o.addEventListener('drop', ev=>{
+    const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+    if(f) mnChonFile(f);
+  });
+}
+
+function mnChonFile(f){
+  if(!f) return;
+  mnTenFile = f.name;
+  const r = new FileReader();
+  r.onload = e => { try{ mnDocBang(new Uint8Array(e.target.result)); }
+                    catch(err){ mnBaoLoi('<b>Không đọc được file.</b><br>' + escapeHtml(err.message)); } };
+  r.onerror = () => mnBaoLoi('<b>Không mở được file.</b>');
+  r.readAsArrayBuffer(f);
+}
+
+function mnDocBang(buf){
+  const wb  = XLSX.read(buf, { type:'array' });
+  const ws  = wb.Sheets[wb.SheetNames[0]];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header:1, raw:true, defval:null });
+
+  // Hàng tiêu đề = hàng đầu tiên có ô ghi MÃ / MÃ SỐ
+  let h = -1;
+  for(let i=0; i<Math.min(aoa.length,25); i++){
+    const r = aoa[i] || [];
+    if(r.some(c=>{ const k = mnBoDau(c); return k==='MASO'||k==='MA'||k==='MANV'; })){ h = i; break; }
+  }
+  if(h < 0){ mnBaoLoi('<b>Không tìm thấy hàng tiêu đề.</b><br>Cần một ô ghi “MÃ SỐ” hoặc “MÃ”.'); return; }
+
+  // Dò cột theo TÊN, không theo thứ tự -> xưởng đổi vị trí cột vẫn chạy
+  const td  = (aoa[h]||[]).map(mnBoDau);
+  const tim = (...k) => td.findIndex(x=>x && k.some(q=>x.indexOf(q)>=0));
+  const cMa  = tim('MASO','MANV','MA');
+  const cTen = tim('NAME','HOVATEN','HOTEN','TEN');
+  let   cTien = tim('THUCLINH');
+  if(cTien < 0) cTien = tim('TONGTIEN');
+  if(cTien < 0) cTien = tim('TTIEN','THANHTIEN');
+
+  const thieu = [];
+  if(cMa   < 0) thieu.push('Mã số');
+  if(cTen  < 0) thieu.push('Họ tên');
+  if(cTien < 0) thieu.push('Thực lĩnh / Tổng tiền');
+  if(thieu.length){
+    mnBaoLoi('<b>Thiếu cột:</b> ' + escapeHtml(thieu.join(', '))
+      + '<br><span class="muted">Cột đọc được: '
+      + escapeHtml((aoa[h]||[]).filter(x=>x!=null&&String(x).trim()).join(' · ')) + '</span>');
+    return;
+  }
+
+  // Tên công ty + ngày: gom các ô chữ phía trên hàng tiêu đề
+  const dong = [];
+  for(let i=0; i<h; i++){
+    (aoa[i]||[]).forEach(c=>{
+      if(typeof c !== 'string') return;
+      c.split(/[\r\n]+|_x000d_/).forEach(x=>{ const t = x.trim(); if(t.length>3) dong.push(t); });
+    });
+  }
+  mnCty = dong[0] || '';
+  mnNgayFile = '';
+  const ngs = dong.join(' ').match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/g) || [];
+  if(ngs.length){
+    const m = ngs[ngs.length-1].match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+    const d = +m[1], t = +m[2], n = +m[3];
+    if(d>=1 && d<=31 && t>=1 && t<=12)
+      mnNgayFile = n + '-' + String(t).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+  }
+
+  mnDS = [];
+  for(let i=h+1; i<aoa.length; i++){
+    const r  = aoa[i] || [];
+    const ma = r[cMa]==null ? '' : String(r[cMa]).trim();
+    if(!ma) continue;                       // bỏ hàng tổng (không có mã)
+    const tien = Number(r[cTien]);
+    if(!isFinite(tien) || tien <= 0) continue;
+    const t = Math.round(tien), phi = mpTinhPhi(t);
+    mnDS.push({ ma, ten: r[cTen]==null ? '' : String(r[cTen]).trim(),
+                tien:t, phi, thucNhan:t-phi, chon:true });
+  }
+  if(!mnDS.length){ mnBaoLoi('<b>Không có dòng dữ liệu nào.</b>'); return; }
+
+  const tenCotTien = String((aoa[h]||[])[cTien] || '').trim();
+  document.getElementById('mnTin').innerHTML =
+    '<div class="mp-tin" style="background:#EAF5EF;border-color:#AFD6C3;color:#1E5C42;margin-top:9px;">'
+    + '<b>Đọc xong:</b> ' + mnDS.length + ' người · tổng ' + formatNumber(mnDS.reduce((s,x)=>s+x.tien,0)) + ' đ<br>'
+    + '<span class="muted">Lấy tiền từ cột <b>' + escapeHtml(tenCotTien) + '</b>'
+    + (mnNgayFile ? ' · ngày trong file <b>' + mpNgayVN(mnNgayFile) + '</b>' : ' · <b>file không ghi ngày</b>')
+    + ' · ' + escapeHtml(mnTenFile) + '</span></div>';
+
+  document.getElementById('mnCaiDat').classList.remove('hidden');
+  document.getElementById('mnNgay').value = mnNgayFile;      // rỗng nếu file không ghi ngày
+  mxNapChon();
+  mpNapOCty();
+  mnDoiXuong();
+}
+
+function mnDoiXuong(){
+  const ma = (document.getElementById('mnXuong')||{}).value || '';
+  const sel = document.getElementById('mnCtyChon');
+  const t = mcTenTheoXuong(ma);
+  if(sel && t && mcTheoTen(t)) sel.value = t;       // nhảy về công ty của xưởng
+  mnDoiCty();
+}
+/* Đổi ô chọn công ty -> đổ xuống ô tên công ty in trên tờ (vẫn sửa tay được) */
+function mnDoiCty(){
+  const sel = document.getElementById('mnCtyChon');
+  const o   = document.getElementById('mnCty');
+  if(o && sel && sel.value) o.value = sel.value;
+  else if(o && !o.value) o.value = mnCty;
+  renderMnBang();
+}
+
+/* V1.16.0 — BÁO KHI TÊN CÔNG TY TRONG FILE KHÁC VỚI TÊN SẼ IN.
+   App ưu tiên công ty cấu hình cho xưởng, vì file của xưởng có thể còn
+   ghi tên cũ chưa sửa (đúng trường hợp 20.10_x3.xlsx ghi TẤN KHỞI trong
+   khi X3 là CHÂU CẨM). Nhưng ĐÈ LẶNG LẼ thì nguy hiểm — lỡ file mới đúng
+   mà cấu hình sai thì in nhầm pháp nhân. Nên nói rõ ra cho người dùng. */
+function mnVeCanhBaoCty(){
+  const o = document.getElementById('mnCtyLech');
+  if(!o) return;
+  const dangIn = ((document.getElementById('mnCty')||{}).value || '').trim();
+  const trongFile = (mnCty || '').trim();
+  if(!trongFile || !dangIn || trongFile === dangIn){ o.innerHTML = ''; return; }
+  o.innerHTML = `<div class="mp-tin" style="background:#FFF8EC;border-color:#F0D9A8;color:#8A6418;margin-top:7px;">
+    Tên công ty <b>trong file</b> là “${escapeHtml(trongFile)}”, khác với tên <b>sẽ in</b>.
+    App lấy theo xưởng đang chọn. Nếu file mới đúng thì sửa lại ô trên.
+    <button class="btn btn-sm btn-outline" style="margin-top:6px;"
+      onclick="(function(){document.getElementById('mnCty').value=${JSON.stringify(trongFile)};renderMnBang();})()">
+      Dùng tên trong file</button></div>`;
+}
+
+function renderMnBang(){
+  mnVeCanhBaoCty();
+  const wrap = document.getElementById('mnBangWrap');
+  const tw   = document.getElementById('mnTongWrap');
+  const nw   = document.getElementById('mnNutWrap');
+  if(!wrap) return;
+  if(!mnDS.length){ wrap.innerHTML = ''; tw.innerHTML = ''; nw.innerHTML = ''; return; }
+
+  const chonHet = mnDS.every(x=>x.chon);
+  let stt = 0;
+  wrap.innerHTML = `
+    <table class="debt-report-table" style="margin-top:9px;">
+      <thead><tr>
+        <th style="width:32px;text-align:center;"><input type="checkbox" ${chonHet?'checked':''} onchange="mnTickHet(this.checked)"></th>
+        <th style="width:30px;text-align:center;">STT</th>
+        <th style="width:84px;text-align:center;">Mã số</th>
+        <th style="text-align:left;">Tên</th>
+        <th>Tiền công</th><th>Phí</th><th>Thực nhận</th>
+      </tr></thead>
+      <tbody>${mnDS.map((x,i)=>{
+        if(x.chon) stt++;
+        return `<tr${x.chon?'':' style="opacity:.45;"'}>
+          <td style="text-align:center;"><input type="checkbox" ${x.chon?'checked':''} onchange="mnTick(${i},this.checked)"></td>
+          <td style="text-align:center;" class="muted">${x.chon?stt:'–'}</td>
+          <td style="text-align:center;" class="font-mono">${escapeHtml(x.ma)}</td>
+          <td style="text-align:left;">${escapeHtml(x.ten)}</td>
+          <td>${formatNumber(x.tien)}</td>
+          <td style="color:var(--amber);">${formatNumber(x.phi)}</td>
+          <td style="color:var(--moss);font-weight:600;">${formatNumber(x.thucNhan)}</td>
+        </tr>`;}).join('')}
+      </tbody>
+    </table>`;
+
+  const ch = mnDS.filter(x=>x.chon);
+  const tC = ch.reduce((s,x)=>s+x.tien,0), tP = ch.reduce((s,x)=>s+x.phi,0);
+  tw.innerHTML = `
+    <div class="card" style="margin-top:8px;background:#EEF4FB;border-color:#C5D9F0;">
+      <div class="mp-dong"><span>Đã chọn</span><b>${ch.length} / ${mnDS.length} người</b></div>
+      <div class="mp-dong"><span>Tổng tiền công</span><b>${formatNumber(tC)}</b></div>
+      <div class="mp-dong"><span>Tổng phí thu</span><b style="color:var(--amber);">${formatNumber(tP)}</b></div>
+      <div class="mp-dong" style="border-top:1px dashed #A9C6E8;margin-top:5px;padding-top:6px;font-size:15px;font-weight:700;">
+        <span>Tiền mặt phải đưa</span><b style="color:var(--moss);">${formatNumber(tC-tP)}</b></div>
+    </div>`;
+  nw.innerHTML = `
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-outline" style="flex:1;" onclick="mnInThu()">🖨️ In thử</button>
+      <button class="btn btn-outline" style="flex:1;" onclick="mnXuatExcel()">📊 Xuất Excel</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-success" style="flex:1;" onclick="mnLuuDot(false)">💾 Lưu</button>
+      <button class="btn btn-primary" style="flex:2;" onclick="mnLuuDot(true)">💾 Lưu &amp; In A4</button>
+    </div>`;
+}
+function mnTick(i,b){ mnDS[i].chon = b; renderMnBang(); }
+function mnTickHet(b){ mnDS.forEach(x=>x.chon = b); renderMnBang(); }
+
+/* Gom thông tin đang chọn trên màn hình thành một đợt chưa lưu */
+function mnDungDot(){
+  const ch    = mnDS.filter(x=>x.chon);
+  const xuong = (document.getElementById('mnXuong')||{}).value || '';
+  const ngay  = (document.getElementById('mnNgay') ||{}).value || '';
+  const cty   = (document.getElementById('mnCty')  ||{}).value.trim() || '';
+  const tC = ch.reduce((s,x)=>s+x.tien,0), tP = ch.reduce((s,x)=>s+x.phi,0);
+  return { rows:ch, xuong, ngayCan:ngay, tenCty:cty,
+           soNguoi:ch.length, tongTien:tC, tongPhi:tP, tongNhan:tC-tP };
+}
+/* Chặn trước khi in/lưu. Thà không ra giấy còn hơn ra tờ tiền sai ngày. */
+function mnKiem(d){
+  if(!d.rows.length){ alert('Chưa chọn ai'); return false; }
+  if(!d.xuong){ alert('Chưa chọn xưởng'); return false; }
+  if(!d.ngayCan){ alert('Chưa có Ngày cân. Chọn ngày rồi hãy làm tiếp.');
+                  const o=document.getElementById('mnNgay'); if(o) o.focus(); return false; }
+  return true;
+}
+
+function mnInThu(){ const d = mnDungDot(); if(!mnKiem(d)) return; mpInA4Ngoai(d, d.rows, 'thu'); }
+
+function mnMaDot(){
+  const n = new Date();
+  const tien = 'MPN-' + n.getFullYear() + String(n.getMonth()+1).padStart(2,'0')
+             + String(n.getDate()).padStart(2,'0') + '-';
+  let max = 0;
+  muaPhieuDot.forEach(d=>{
+    const m = String((d && d.ma) || '');
+    if(m.indexOf(tien) === 0){ const k = parseInt(m.slice(tien.length),10); if(!isNaN(k) && k>max) max = k; }
+  });
+  return tien + String(max+1).padStart(2,'0');
+}
+
+/* coIn = true  -> lưu xong in luôn tờ A4
+   coIn = false -> CHỈ lưu, không in. Vào mục "Đã mua" in lại lúc nào cũng được. */
+function mnLuuDot(coIn){
+  if(!requirePerm('muaPhieuNhap')) return;
+  const d = mnDungDot();
+  if(!mnKiem(d)) return;
+
+  /* Cảnh báo nhập trùng — cùng xưởng + cùng ngày cân + cùng tổng tiền.
+     CHỈ cảnh báo, không chặn: hiếm nhưng có thể là hai đợt thật trùng số. */
+  const trung = muaPhieuDot.find(x=>x && x.loai==='ngoai' && x.xuong===d.xuong
+                && x.ngayCan===d.ngayCan && Number(x.tongTien)===d.tongTien);
+  if(trung){
+    const luc = trung.createdAt ? new Date(trung.createdAt).toLocaleString('vi-VN') : '(không rõ)';
+    if(!confirm('⚠️ ĐỢT NÀY HÌNH NHƯ ĐÃ NHẬP RỒI\n\n'
+      + 'Mã đợt: ' + trung.ma + '\nXưởng: ' + mxTen(trung.xuong)
+      + '\nNgày cân: ' + mpNgayVN(trung.ngayCan)
+      + '\nSố người: ' + formatNumber(trung.soNguoi)
+      + '\nTổng tiền: ' + formatNumber(trung.tongTien)
+      + '\nNhập lúc: ' + luc + ' — ' + (trung.byUserName || '')
+      + '\n\nNhập thêm sẽ làm BÁO CÁO CỘNG ĐÔI.\n\nVẫn nhập thêm?')) return;
+  }
+
+  const ma = mnMaDot();
+  const dot = { id:ma, ma, loai:'ngoai', xuong:d.xuong, tenCty:d.tenCty,
+                ngayCan:d.ngayCan, soNguoi:d.soNguoi, tongTien:d.tongTien,
+                tongPhi:d.tongPhi, tongNhan:d.tongNhan, tenFile:mnTenFile,
+                createdAt: Date.now(),
+                byUserId: currentUser?currentUser.id:'',
+                byUserName: currentUser?currentUser.name:'',
+                daThu:false, ngayThu:'', ghiChuThu:'', nguoiThu:'' };
+  mpGhiDot(dot);
+
+  // Chi tiết nằm kho RIÊNG, không tải cùng app -> kho tổng mãi mãi nhẹ
+  const rows = d.rows.map(x=>({ ma:x.ma, ten:x.ten, tien:x.tien, phi:x.phi }));
+  mnCacheCT[ma] = rows;
+  ghiNgay('muaPhieuCT', { id:ma, ma, rows });
+
+  logActivity('Nhập đợt mua phiếu', ma + ' — ' + d.xuong + ' · ' + d.soNguoi + ' người · '
+    + formatNumber(d.tongTien) + ' đ');
+  saveAll(true);
+  mxNapChon();
+  document.getElementById('mnKetQua').innerHTML =
+    `<span style="color:var(--moss);font-weight:600;">✅ Đã lưu đợt ${ma}.</span>
+     <span class="muted"> Vào mục <b>Đã mua</b> để in lại hoặc xoá.</span>`;
+  if(coIn) mpInA4Ngoai(Object.assign({}, d, { ma }), d.rows, 'that');
+}
+
+/* Tờ in A4 cho đợt nhập ngoài — cùng khuôn với tờ của đợt nội bộ */
+/* Đợt nhập ngoài — dùng chung khuôn mpToA4 */
+function mpInA4Ngoai(dot, rows, kieu){
+  mpInNhieuTo([Object.assign({}, dot, { rows })], kieu);
+}
+function mnXuatExcel(){
+  if(!requirePerm('exportExcel')) return;
+  const d = mnDungDot();
+  if(!mnKiem(d)) return;
+  const aoa = [];
+  if(d.tenCty) aoa.push([d.tenCty]);
+  aoa.push([]);
+  aoa.push(['BẢNG TRẢ TIỀN CÔNG NGÀY ' + mpNgayVN(d.ngayCan)]);
+  aoa.push(['Xưởng: ' + d.xuong + ' · Phí mua phiếu 1%']);
+  aoa.push([]);
+  aoa.push(['STT','Mã số','Họ và tên','Tiền công','Phí 1%','Thực nhận','Ký nhận']);
+  const dong0 = aoa.length;
+  d.rows.forEach((x,i)=> aoa.push([i+1, x.ma, x.ten, x.tien, x.phi, x.thucNhan, '']));
+  aoa.push(['','','TỔNG CỘNG — ' + d.soNguoi + ' người', d.tongTien, d.tongPhi, d.tongNhan, '']);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:5},{wch:12},{wch:26},{wch:13},{wch:10},{wch:13},{wch:14}];
+  for(let i=0; i<=d.rows.length; i++){
+    ['D','E','F'].forEach(c=>{ const o = ws[c+(dong0+i+1)]; if(o && typeof o.v==='number') o.z = '#,##0'; });
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Mua phieu');
+  XLSX.writeFile(wb, 'mua-phieu-' + d.xuong + '-' + d.ngayCan + '.xlsx');
+}
+
+/* =====================================================================
+   V1.15.0 — MỤC TRẢ TIỀN
+   Dòng tiền THỨ HAI, khác hẳn mua phiếu:
+     anh Tinh  -> công nhân : tiền mặt ứng ra = tongNhan
+     công ty   -> anh Tinh  : hoàn lại        = tongTien
+     chênh lệch                                = tongPhi (lãi)
+   Mục này CHỈ đánh dấu đã thu hay chưa, KHÔNG đụng công nợ công nhân.
+   ===================================================================== */
+let mtCheDo  = 'chua';     // 'chua' | 'roi'
+let mtBoChon = new Set();  // mã đợt BỊ bỏ tick
+
+function mtDoiCheDo(c){ mtCheDo = c; mtBoChon.clear(); renderMpThu(); }
+
+function mtLoc(){
+  const tu    = (document.getElementById('mtTu')   ||{}).value || '';
+  const den   = (document.getElementById('mtDen')  ||{}).value || '';
+  const xuong = (document.getElementById('mtXuong')||{}).value || '';
+  return mpLocDot(tu, den, xuong).filter(d => mtCheDo==='roi' ? !!d.daThu : !d.daThu);
+}
+
+function mtTick(ma, b){ if(b) mtBoChon.delete(ma); else mtBoChon.add(ma); renderMpThu(); }
+function mtTickHet(b){
+  mtBoChon.clear();
+  if(!b) mtLoc().forEach(d=>mtBoChon.add(d.ma));
+  renderMpThu();
+}
+
+function renderMpThu(){
+  const tw = document.getElementById('mtTongWrap');
+  const bw = document.getElementById('mtBangWrap');
+  const cw = document.getElementById('mtChonWrap');
+  if(!bw) return;
+  const nChua = document.getElementById('mtNutChua'), nRoi = document.getElementById('mtNutRoi');
+  if(nChua){ nChua.className = 'btn ' + (mtCheDo==='chua' ? 'btn-primary' : 'btn-outline'); }
+  if(nRoi){  nRoi.className  = 'btn ' + (mtCheDo==='roi'  ? 'btn-success' : 'btn-outline'); }
+
+  const ds = mtLoc();
+  const tTien = ds.reduce((s,d)=>s+(Number(d.tongTien)||0),0);
+  const tNhan = ds.reduce((s,d)=>s+(Number(d.tongNhan)||0),0);
+  const tPhi  = ds.reduce((s,d)=>s+(Number(d.tongPhi)||0),0);
+
+  if(mtCheDo==='chua'){
+    tw.innerHTML = `<div class="card" style="margin-top:8px;background:#FDEAE7;border-color:#E8B4AD;">
+      <div style="font-size:12.5px;font-weight:700;color:#8E2018;">⚠️ Công ty còn nợ anh</div>
+      <div style="font-size:21px;font-weight:700;color:#8E2018;margin-top:2px;">${formatNumber(tTien)} đ</div>
+      <div class="muted" style="font-size:11.5px;margin-top:3px;">${ds.length} đợt · đã ứng ra ${formatNumber(tNhan)} · lãi ${formatNumber(tPhi)}</div>
+    </div>`;
+  }else{
+    tw.innerHTML = `<div class="card" style="margin-top:8px;background:#EAF5EF;border-color:#AFD6C3;">
+      <div style="font-size:12.5px;color:#1E5C42;"><b>${ds.length} đợt đã thu đủ</b> — công ty đã hoàn
+        <b>${formatNumber(tTien)} đ</b>, trong đó lãi <b>${formatNumber(tPhi)} đ</b>.</div>
+    </div>`;
+  }
+
+  if(!ds.length){
+    bw.innerHTML = `<div class="empty-state">${mtCheDo==='chua' ? 'Không còn đợt nào chưa thu' : 'Chưa có đợt nào được đánh dấu đã thu'}</div>`;
+    cw.innerHTML = ''; return;
+  }
+
+  if(mtCheDo==='chua'){
+    const het = ds.every(d=>!mtBoChon.has(d.ma));
+    bw.innerHTML = `
+      <table class="debt-report-table" style="margin-top:9px;">
+        <thead><tr>
+          <th style="width:32px;text-align:center;"><input type="checkbox" ${het?'checked':''} onchange="mtTickHet(this.checked)"></th>
+          <th style="width:54px;text-align:center;">Ngày cân</th>
+          <th style="width:56px;text-align:center;">Xưởng</th>
+          <th>Đã ứng ra</th><th>Phải thu</th><th>Lãi</th>
+        </tr></thead>
+        <tbody>${ds.map(d=>`<tr>
+          <td style="text-align:center;"><input type="checkbox" ${mtBoChon.has(d.ma)?'':'checked'} onchange="mtTick('${escapeHtml(d.ma)}',this.checked)"></td>
+          <td style="text-align:center;">${mpNgayVN(d.ngayCan)}</td>
+          <td style="text-align:center;">${mpNhanXuong(d.xuong)}</td>
+          <td class="muted">${formatNumber(d.tongNhan)}</td>
+          <td style="font-weight:700;">${formatNumber(d.tongTien)}</td>
+          <td style="color:var(--moss);font-weight:700;">${formatNumber(d.tongPhi)}</td>
+        </tr>`).join('')}
+        <tr class="total-row"><td colspan="3">${ds.length} đợt chưa thu</td>
+          <td>${formatNumber(tNhan)}</td><td>${formatNumber(tTien)}</td><td>${formatNumber(tPhi)}</td></tr>
+        </tbody>
+      </table>`;
+    const chon = ds.filter(d=>!mtBoChon.has(d.ma));
+    const cT = chon.reduce((s,d)=>s+(Number(d.tongTien)||0),0);
+    const cP = chon.reduce((s,d)=>s+(Number(d.tongPhi)||0),0);
+    cw.innerHTML = `
+      <div class="card" style="margin-top:8px;background:#EEF4FB;border-color:#C5D9F0;">
+        <div class="mp-dong"><span>Đã chọn</span><b>${chon.length} đợt</b></div>
+        <div class="mp-dong"><span>Lãi của các đợt này</span><b style="color:var(--moss);">${formatNumber(cP)}</b></div>
+        <div class="mp-dong" style="border-top:1px dashed #A9C6E8;margin-top:5px;padding-top:6px;font-size:15px;font-weight:700;">
+          <span>Công ty phải trả</span><b style="color:#8E2018;">${formatNumber(cT)}</b></div>
+      </div>
+      <button class="btn btn-success btn-block" style="margin-top:8px;" ${chon.length?'':'disabled'}
+        onclick="mtXacNhanThu()">✅ Xác nhận đã thu ${formatNumber(cT)} đ</button>`;
+  }else{
+    bw.innerHTML = `
+      <table class="debt-report-table" style="margin-top:9px;">
+        <thead><tr>
+          <th style="width:54px;text-align:center;">Ngày cân</th>
+          <th style="width:56px;text-align:center;">Xưởng</th>
+          <th style="width:54px;text-align:center;">Ngày thu</th>
+          <th>Đã thu</th><th>Lãi</th><th style="width:56px;text-align:center;">Bỏ dấu</th>
+        </tr></thead>
+        <tbody>${ds.map(d=>`<tr>
+          <td style="text-align:center;">${mpNgayVN(d.ngayCan)}</td>
+          <td style="text-align:center;">${mpNhanXuong(d.xuong)}</td>
+          <td style="text-align:center;" class="muted">${mpNgayVN(d.ngayThu)}</td>
+          <td style="font-weight:700;">${formatNumber(d.tongTien)}</td>
+          <td style="color:var(--moss);font-weight:700;">${formatNumber(d.tongPhi)}</td>
+          <td style="text-align:center;"><button class="btn btn-sm btn-outline" onclick="mtBoDanhDau('${escapeHtml(d.ma)}')">↩</button></td>
+        </tr>`).join('')}
+        <tr class="total-row"><td colspan="3">TỔNG — ${ds.length} đợt</td>
+          <td>${formatNumber(tTien)}</td><td>${formatNumber(tPhi)}</td><td></td></tr>
+        </tbody>
+      </table>`;
+    cw.innerHTML = `<div class="muted" style="font-size:11.5px;margin-top:7px;line-height:1.5;">
+      Bấm ↩ để bỏ đánh dấu nếu lỡ xác nhận nhầm — đợt đó quay về mục Chưa thu.</div>`;
+  }
+}
+
+function mtXacNhanThu(){
+  if(!requirePerm('muaPhieuThu')) return;
+  const chon = mtLoc().filter(d=>!mtBoChon.has(d.ma));
+  if(!chon.length){ alert('Chưa chọn đợt nào'); return; }
+  const tong = chon.reduce((s,d)=>s+(Number(d.tongTien)||0),0);
+  if(!confirm('Xác nhận công ty ĐÃ TRẢ ' + formatNumber(tong) + ' đ cho ' + chon.length + ' đợt?')) return;
+  const ghiChu = (prompt('Ghi chú (không bắt buộc) — ví dụ: chuyển khoản VCB, tiền mặt anh Dũng đưa', '') || '').trim();
+  const homNay = todayKey();
+  chon.forEach(d=>{
+    mpGhiDot(Object.assign({}, d, { daThu:true, ngayThu:homNay, ghiChuThu:ghiChu,
+                                    nguoiThu: currentUser ? currentUser.name : '' }));
+  });
+  logActivity('Xác nhận thu tiền', chon.length + ' đợt — ' + formatNumber(tong) + ' đ'
+    + (ghiChu ? ' · ' + ghiChu : ''));
+  saveAll(true);
+  mtBoChon.clear();
+  renderMpThu();
+}
+
+function mtBoDanhDau(ma){
+  if(!requirePerm('muaPhieuThu')) return;
+  const d = muaPhieuDot.find(x=>x && x.ma === ma);
+  if(!d) return;
+  if(!confirm('Bỏ đánh dấu đã thu cho đợt ' + ma + '?\nĐợt này quay về mục Chưa thu.')) return;
+  mpGhiDot(Object.assign({}, d, { daThu:false, ngayThu:'', ghiChuThu:'', nguoiThu:'' }));
+  logActivity('Bỏ đánh dấu đã thu', ma);
+  saveAll(true);
+  renderMpThu();
+}
+
+/* =====================================================================
+   V1.15.0 — BÁO CÁO MUA PHIẾU (tổng hợp theo xưởng / chi tiết theo đợt)
+   ===================================================================== */
+let mbMuc = 'th';
+function mbDoiMuc(m){
+  mbMuc = m;
+  document.getElementById('mbSegTh').classList.toggle('active', m==='th');
+  document.getElementById('mbSegCt').classList.toggle('active', m==='ct');
+  const xw = document.getElementById('mbXuongWrap');
+  if(xw) xw.style.display = (m==='ct') ? '' : 'none';   // tổng hợp đã tách theo xưởng rồi
+  renderMpBaoCao();
+}
+
+function mbDuLieu(){
+  const tu    = (document.getElementById('mbTu')   ||{}).value || '';
+  const den   = (document.getElementById('mbDen')  ||{}).value || '';
+  const xuong = (mbMuc==='ct') ? ((document.getElementById('mbXuong')||{}).value || '') : '';
+  const ds = mpLocDot(tu, den, xuong);
+  if(mbMuc === 'ct') return { tu, den, xuong, rows: ds };
+  const m = {};
+  ds.forEach(d=>{
+    const k = d.xuong || '(chưa rõ)';
+    if(!m[k]) m[k] = { xuong:k, soDot:0, soNguoi:0, tongTien:0, tongPhi:0, tongNhan:0, daThu:0 };
+    const g = m[k];
+    g.soDot++; g.soNguoi += Number(d.soNguoi)||0;
+    g.tongTien += Number(d.tongTien)||0;
+    g.tongPhi  += Number(d.tongPhi)||0;
+    g.tongNhan += Number(d.tongNhan)||0;
+    if(d.daThu) g.daThu += Number(d.tongTien)||0;
+  });
+  const rows = Object.keys(m).map(k=>m[k])
+    .sort((a,b)=>{   // xưởng nội bộ lên trước, rồi theo mã
+      const na = mxLaNoiBo(a.xuong) ? 0 : 1, nb = mxLaNoiBo(b.xuong) ? 0 : 1;
+      return na !== nb ? na - nb : String(a.xuong).localeCompare(String(b.xuong));
+    });
+  return { tu, den, xuong:'', rows };
+}
+
+function renderMpBaoCao(){
+  const wrap = document.getElementById('mbBangWrap');
+  if(!wrap) return;
+  const d = mbDuLieu();
+  if(!d.rows.length){ wrap.innerHTML = `<div class="empty-state">Không có đợt nào trong khoảng này</div>`; return; }
+
+  if(mbMuc === 'th'){
+    const t = d.rows.reduce((a,r)=>({ soDot:a.soDot+r.soDot, soNguoi:a.soNguoi+r.soNguoi,
+      tongTien:a.tongTien+r.tongTien, tongPhi:a.tongPhi+r.tongPhi, tongNhan:a.tongNhan+r.tongNhan }),
+      { soDot:0, soNguoi:0, tongTien:0, tongPhi:0, tongNhan:0 });
+    wrap.innerHTML = `
+      <table class="debt-report-table" style="margin-top:9px;">
+        <thead><tr><th style="text-align:left;">Xưởng</th><th>Đợt</th><th>Lượt</th>
+          <th>Tiền công</th><th>Phí</th><th>Thực trả</th></tr></thead>
+        <tbody>${d.rows.map(r=>`<tr>
+            <td style="text-align:left;">${mpNhanXuong(r.xuong)} ${escapeHtml((mxTim(r.xuong)||{}).ten || '')}</td>
+            <td>${formatNumber(r.soDot)}</td><td>${formatNumber(r.soNguoi)}</td>
+            <td>${formatNumber(r.tongTien)}</td>
+            <td style="color:var(--amber);font-weight:600;">${formatNumber(r.tongPhi)}</td>
+            <td style="color:var(--moss);font-weight:700;">${formatNumber(r.tongNhan)}</td>
+          </tr>`).join('')}
+          <tr class="total-row"><td style="text-align:left;">TỔNG CỘNG</td>
+            <td>${formatNumber(t.soDot)}</td><td>${formatNumber(t.soNguoi)}</td>
+            <td>${formatNumber(t.tongTien)}</td><td>${formatNumber(t.tongPhi)}</td>
+            <td>${formatNumber(t.tongNhan)}</td></tr>
+        </tbody>
+      </table>
+      <div class="muted" style="font-size:11.5px;margin-top:7px;line-height:1.5;">
+        Cột <b>Lượt</b> đếm số lượt người của từng đợt cộng lại, không phải số đầu người —
+        một người làm ba ngày tính ba lượt.</div>`;
+  }else{
+    const t = d.rows.reduce((a,r)=>({ soNguoi:a.soNguoi+(Number(r.soNguoi)||0),
+      tongTien:a.tongTien+(Number(r.tongTien)||0), tongPhi:a.tongPhi+(Number(r.tongPhi)||0),
+      tongNhan:a.tongNhan+(Number(r.tongNhan)||0) }), { soNguoi:0, tongTien:0, tongPhi:0, tongNhan:0 });
+    wrap.innerHTML = `
+      <table class="debt-report-table" style="margin-top:9px;">
+        <thead><tr><th style="width:54px;text-align:center;">Ngày cân</th>
+          <th style="width:56px;text-align:center;">Xưởng</th><th style="text-align:left;">Mã đợt</th>
+          <th>Lượt</th><th>Tiền công</th><th>Phí</th><th>Thực trả</th></tr></thead>
+        <tbody>${d.rows.map(r=>`<tr>
+            <td style="text-align:center;">${mpNgayVN(r.ngayCan)}</td>
+            <td style="text-align:center;">${mpNhanXuong(r.xuong)}</td>
+            <td style="text-align:left;" class="font-mono">${escapeHtml(r.ma)}${r.daThu?' <span style="color:var(--moss);">✓</span>':''}</td>
+            <td>${formatNumber(r.soNguoi)}</td><td>${formatNumber(r.tongTien)}</td>
+            <td style="color:var(--amber);font-weight:600;">${formatNumber(r.tongPhi)}</td>
+            <td style="color:var(--moss);font-weight:700;">${formatNumber(r.tongNhan)}</td>
+          </tr>`).join('')}
+          <tr class="total-row"><td colspan="3" style="text-align:left;">TỔNG — ${d.rows.length} đợt</td>
+            <td>${formatNumber(t.soNguoi)}</td><td>${formatNumber(t.tongTien)}</td>
+            <td>${formatNumber(t.tongPhi)}</td><td>${formatNumber(t.tongNhan)}</td></tr>
+        </tbody>
+      </table>
+      <div class="muted" style="font-size:11.5px;margin-top:7px;">Dấu ✓ là đợt công ty đã hoàn tiền.</div>`;
+  }
+}
+
+function mbIn(){
+  const d = mbDuLieu();
+  if(!d.rows.length){ alert('Không có dữ liệu để in'); return; }
+  const ky = 'Từ ngày ' + mpNgayVN(d.tu) + ' đến ngày ' + mpNgayVN(d.den);
+  let head, body, tong;
+  if(mbMuc === 'th'){
+    const t = d.rows.reduce((a,r)=>({ soDot:a.soDot+r.soDot, soNguoi:a.soNguoi+r.soNguoi,
+      tongTien:a.tongTien+r.tongTien, tongPhi:a.tongPhi+r.tongPhi, tongNhan:a.tongNhan+r.tongNhan }),
+      { soDot:0, soNguoi:0, tongTien:0, tongPhi:0, tongNhan:0 });
+    head = '<tr><th style="text-align:left;">Xưởng</th><th>Số đợt</th><th>Lượt người</th><th>Tiền công</th><th>Phí</th><th>Thực trả</th></tr>';
+    body = d.rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(mxTen(r.xuong))}</td>
+      <td>${formatNumber(r.soDot)}</td><td>${formatNumber(r.soNguoi)}</td><td>${formatNumber(r.tongTien)}</td>
+      <td>${formatNumber(r.tongPhi)}</td><td>${formatNumber(r.tongNhan)}</td></tr>`).join('');
+    tong = `<tr class="total-row"><td style="text-align:left;">TỔNG CỘNG</td><td>${formatNumber(t.soDot)}</td>
+      <td>${formatNumber(t.soNguoi)}</td><td>${formatNumber(t.tongTien)}</td>
+      <td>${formatNumber(t.tongPhi)}</td><td>${formatNumber(t.tongNhan)}</td></tr>`;
+  }else{
+    const t = d.rows.reduce((a,r)=>({ soNguoi:a.soNguoi+(Number(r.soNguoi)||0),
+      tongTien:a.tongTien+(Number(r.tongTien)||0), tongPhi:a.tongPhi+(Number(r.tongPhi)||0),
+      tongNhan:a.tongNhan+(Number(r.tongNhan)||0) }), { soNguoi:0, tongTien:0, tongPhi:0, tongNhan:0 });
+    head = '<tr><th style="text-align:left;">Ngày cân</th><th>Xưởng</th><th>Mã đợt</th><th>Lượt</th><th>Tiền công</th><th>Phí</th><th>Thực trả</th></tr>';
+    body = d.rows.map(r=>`<tr><td style="text-align:left;">${mpNgayVN(r.ngayCan)}</td>
+      <td>${escapeHtml(r.xuong||'')}</td><td>${escapeHtml(r.ma)}</td><td>${formatNumber(r.soNguoi)}</td>
+      <td>${formatNumber(r.tongTien)}</td><td>${formatNumber(r.tongPhi)}</td><td>${formatNumber(r.tongNhan)}</td></tr>`).join('');
+    tong = `<tr class="total-row"><td colspan="3" style="text-align:left;">TỔNG — ${d.rows.length} đợt</td>
+      <td>${formatNumber(t.soNguoi)}</td><td>${formatNumber(t.tongTien)}</td>
+      <td>${formatNumber(t.tongPhi)}</td><td>${formatNumber(t.tongNhan)}</td></tr>`;
+  }
+  document.getElementById('printArea').innerHTML = `
+    <div class="report-print-page">
+      ${reportPrintHeader(mbMuc==='th' ? 'BÁO CÁO MUA PHIẾU — TỔNG HỢP THEO XƯỞNG'
+                                       : 'BÁO CÁO MUA PHIẾU — CHI TIẾT THEO ĐỢT', ky)}
+      <table class="report-print-table"><thead>${head}</thead><tbody>${body}${tong}</tbody></table>
+      <div class="report-print-footer">
+        <div style="width:50%;">Người lập biểu<br><br><br>_____________</div>
+        <div style="width:50%;">Giám đốc<br><br><br>_____________</div>
+      </div>
+    </div>`;
+  window.print();
+}
+
+function mbXuatExcel(){
+  if(!requirePerm('exportExcel')) return;
+  const d = mbDuLieu();
+  if(!d.rows.length){ alert('Không có dữ liệu để xuất'); return; }
+  const aoa = [];
+  if(companyInfo.name) aoa.push([companyInfo.name]);
+  aoa.push([]);
+  aoa.push([mbMuc==='th' ? 'BÁO CÁO MUA PHIẾU — TỔNG HỢP THEO XƯỞNG'
+                         : 'BÁO CÁO MUA PHIẾU — CHI TIẾT THEO ĐỢT']);
+  aoa.push(['Từ ngày ' + mpNgayVN(d.tu) + ' đến ngày ' + mpNgayVN(d.den)]);
+  aoa.push([]);
+  let dong0, soCotTien;
+  if(mbMuc === 'th'){
+    aoa.push(['Xưởng','Số đợt','Lượt người','Tiền công','Phí','Thực trả']);
+    dong0 = aoa.length;
+    d.rows.forEach(r=> aoa.push([mxTen(r.xuong), r.soDot, r.soNguoi, r.tongTien, r.tongPhi, r.tongNhan]));
+    const t = d.rows.reduce((a,r)=>[a[0]+r.soDot,a[1]+r.soNguoi,a[2]+r.tongTien,a[3]+r.tongPhi,a[4]+r.tongNhan],[0,0,0,0,0]);
+    aoa.push(['TỔNG CỘNG', t[0], t[1], t[2], t[3], t[4]]);
+    soCotTien = ['D','E','F'];
+  }else{
+    aoa.push(['Ngày cân','Xưởng','Mã đợt','Lượt','Tiền công','Phí','Thực trả','Đã thu','Ngày thu','Ghi chú']);
+    dong0 = aoa.length;
+    d.rows.forEach(r=> aoa.push([mpNgayVN(r.ngayCan), r.xuong||'', r.ma, r.soNguoi,
+      r.tongTien, r.tongPhi, r.tongNhan, r.daThu?'x':'', r.daThu?mpNgayVN(r.ngayThu):'', r.ghiChuThu||'']));
+    const t = d.rows.reduce((a,r)=>[a[0]+(+r.soNguoi||0),a[1]+(+r.tongTien||0),a[2]+(+r.tongPhi||0),a[3]+(+r.tongNhan||0)],[0,0,0,0]);
+    aoa.push(['TỔNG','','', t[0], t[1], t[2], t[3], '', '', '']);
+    soCotTien = ['E','F','G'];
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = (mbMuc==='th')
+    ? [{wch:26},{wch:9},{wch:12},{wch:15},{wch:12},{wch:15}]
+    : [{wch:12},{wch:9},{wch:19},{wch:8},{wch:15},{wch:12},{wch:15},{wch:9},{wch:12},{wch:24}];
+  for(let i=0; i<=d.rows.length; i++){
+    soCotTien.forEach(c=>{ const o = ws[c+(dong0+i+1)]; if(o && typeof o.v==='number') o.z = '#,##0'; });
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, mbMuc==='th' ? 'Tong hop' : 'Chi tiet');
+  XLSX.writeFile(wb, 'bao-cao-mua-phieu-' + (mbMuc==='th'?'tonghop':'chitiet') + '-' + d.tu + '_' + d.den + '.xlsx');
+}
+
 // ===== SETTLEMENT (Chốt ngày) =====
 function renderSettlement(){
   const dateKey = document.getElementById('settleDate').value || todayKey();
@@ -5828,6 +7679,7 @@ const COLLECTIONS = {
   payments: () => payments,
   overtimeDays: () => overtimeDays,
   staffUsers: () => staffUsers,
+  muaPhieuDot: () => muaPhieuDot,
 };
 const COLLECTION_SETTERS = {
   employees: (v)=>{ employees = v; },
@@ -5837,12 +7689,14 @@ const COLLECTION_SETTERS = {
   payments: (v)=>{ payments = v; },
   overtimeDays: (v)=>{ overtimeDays = v; },
   staffUsers: (v)=>{ staffUsers = v; },
+  muaPhieuDot: (v)=>{ muaPhieuDot = v; },
 };
 const COLLECTION_LOCALKEYS = {
   employees: EMP_KEY, products: PROD_KEY, weighings: WEIGH_KEY, openingBalances: OPEN_KEY,
   payments: PAY_KEY, overtimeDays: OVERTIME_KEY, staffUsers: STAFF_KEY,
+  muaPhieuDot: MPDOT_KEY,
 };
-let lastSynced = { employees:[], products:[], weighings:[], openingBalances:[], payments:[], overtimeDays:[], staffUsers:[], companyInfo:null, appOptions:null };
+let lastSynced = { employees:[], products:[], weighings:[], openingBalances:[], payments:[], overtimeDays:[], staffUsers:[], muaPhieuDot:[], companyInfo:null, appOptions:null };
 let fsDb = null;
 let fsReady = false;
 let cloudSyncTimer = null;
