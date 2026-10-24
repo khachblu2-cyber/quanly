@@ -1,7 +1,7 @@
 <!--
 ================================================================================
   BÀN GIAO — APP CÂN TÔM (Tính tiền công nhật)
-  Phiên bản: V1.16.1    Cập nhật: 23/10/2026
+  Phiên bản: V1.16.2    Cập nhật: 24/10/2026
 --------------------------------------------------------------------------------
   TÀI LIỆU NÀY NẰM NGAY TRONG FILE, KHÔNG BAO GIỜ LỆCH VỚI CODE.
   Mỗi lần sửa file BẮT BUỘC cập nhật luôn phần này (số phiên bản + dòng
@@ -713,6 +713,29 @@
            KHÔNG ĐỤNG: công thức tính tiền, kho dữ liệu, quyền, Cloud
            Function, cách đọc file Excel.
 
+  V1.16.2  THÊM XƯỞNG 8 (Châu Bá Thảo, nhập từ Excel).
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           Đúng MỘT dòng trong MP_XUONG_MAC_DINH:
+             { ma:'X8', ten:'Xưởng 8', cty:'CBT', noiBo:false }
+
+           noiBo:false — X8 tự làm bảng lương rồi gửi file Excel, không cân
+           trong app. Đây là xưởng Châu Bá Thảo ĐẦU TIÊN không cân nội bộ,
+           nên lưu ý: cty='CBT' và noiBo không liên quan gì nhau. Đã soát
+           cả ba chỗ dùng noiBo (ô chọn xưởng mục Nhập Excel, màu nhãn,
+           thứ tự sắp xếp báo cáo) — không chỗ nào suy ra công ty từ noiBo.
+
+           mxGoiYTuTen() KHÔNG phải sửa: nó khớp /X\d{1,2}/ rồi đối chiếu
+           với mxDanhSach(), nên tài khoản tên "... X8" tự được gợi ý ngay
+           khi X8 có mặt trong danh sách.
+
+           KHÔNG ĐỤNG gì khác.
+
+           CÒN NỢ: app vẫn chưa có màn hình quản lý Xưởng & Công ty. Chỗ
+           chứa dữ liệu đã có sẵn và đã đồng bộ (appOptions.xuongList,
+           appOptions.congTyList) nhưng không có giao diện sửa, nên mỗi
+           lần thêm xưởng vẫn phải sửa file. Nên làm màn hình đó.
+
   V1.16.1  LÀM NỔI CHỮ XƯỞNG TRÊN TỜ IN + hai chỗ vướng ở màn hình.
            (md5 ghi ở BAN-GIAO-TONG-THE)
 
@@ -1227,7 +1250,7 @@
   <div class="brand-row">
     <div class="brand">
       <div class="brand-title">⚖️ Cân Tôm</div>
-      <div class="brand-status"><span class="ver-badge">V1.16.1</span> · <span id="cloudStatus"></span></div>
+      <div class="brand-status"><span class="ver-badge">V1.16.2</span> · <span id="cloudStatus"></span></div>
     </div>
     <div id="currentUserBar" class="hidden brand-user">
       <span>👤 <span id="currentUserNameLabel"></span></span>
@@ -6002,11 +6025,13 @@ function mpXuatExcel(){
    V1.15.0 — ĐỢT MUA PHIẾU: NỘI BỘ + NHẬP TỪ EXCEL
    Đọc mục V1.15.0 trong phần bàn giao đầu file trước khi sửa.
    ===================================================================== */
-/* V1.16.0 — BA CÔNG TY, SÁU XƯỞNG.
+/* V1.16.2 — BA CÔNG TY, BẢY XƯỞNG.
    App Cân Tôm phục vụ X1, X2, X7 (người cân là tài khoản trong app).
-   X3, X4, TK1 gửi file Excel.
+   X3, X4, X8, TK1 gửi file Excel.
    Tên công ty CHỈ LÀ MẶC ĐỊNH theo xưởng — lúc in đổi được, vì có khi
-   xưởng này in dưới pháp nhân khác. */
+   xưởng này in dưới pháp nhân khác.
+   LƯU Ý: cty và noiBo KHÔNG dính nhau. X8 thuộc Châu Bá Thảo nhưng gửi
+   Excel chứ không cân trong app. */
 const MP_CTY_MAC_DINH = [
   { ma:'CBT', ten:'CTY TNHH MTV THỦY SẢN CHÂU BÁ THẢO',
     diaChi:'Ấp Bờ Cảng, Xã Long Điền, Tỉnh Cà Mau', dienThoai:'02913.70.6666' },
@@ -6020,6 +6045,7 @@ const MP_XUONG_MAC_DINH = [
   { ma:'X7',  ten:'Xưởng 7',     cty:'CBT', noiBo:true  },
   { ma:'X3',  ten:'Xưởng 3',     cty:'CC',  noiBo:false },
   { ma:'X4',  ten:'Xưởng 4',     cty:'TK',  noiBo:false },
+  { ma:'X8',  ten:'Xưởng 8',     cty:'CBT', noiBo:false },   // V1.16.2
   { ma:'TK1', ten:'Tấn Khởi 1',  cty:'TK',  noiBo:false }
 ];
 function mcDanhSach(){
