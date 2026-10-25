@@ -1,7 +1,7 @@
 <!--
 ================================================================================
   BÀN GIAO — APP CÂN TÔM (Tính tiền công nhật)
-  Phiên bản: V1.18.0    Cập nhật: 25/10/2026
+  Phiên bản: V1.18.1    Cập nhật: 25/10/2026
 --------------------------------------------------------------------------------
   TÀI LIỆU NÀY NẰM NGAY TRONG FILE, KHÔNG BAO GIỜ LỆCH VỚI CODE.
   Mỗi lần sửa file BẮT BUỘC cập nhật luôn phần này (số phiên bản + dòng
@@ -713,6 +713,26 @@
            KHÔNG ĐỤNG: công thức tính tiền, kho dữ liệu, quyền, Cloud
            Function, cách đọc file Excel.
 
+  V1.18.1  MỞ MỤC BÁO CÁO LÀ THẤY NGAY HÔM QUA.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           Chủ trả tiền công của hôm qua vào hôm nay, nên mở mục Báo cáo ra
+           là muốn thấy số của hôm qua luôn, khỏi bấm.
+
+           Mở LẦN ĐẦU trong phiên -> tự chọn "Hôm qua": nút sáng sẵn, hai ô
+           ngày điền sẵn, bảng hiện luôn. Sau đó NHỚ lựa chọn của người dùng
+           — đang xem "Tháng này" rồi qua mục khác, quay lại vẫn là Tháng
+           này, không bị kéo về Hôm qua giữa chừng.
+           (Muốn đổi thành LUÔN về Hôm qua mỗi lần mở: bỏ cờ mbDaMoLanDau.)
+
+           Bỏ mbTu/mbDen khỏi danh sách đặt mặc định trong moTabMuaPhieu()
+           — trước đó chúng được đặt "đầu tháng -> hôm nay" ở đó. Để cả hai
+           nơi cùng đặt thì sau này sửa một chỗ sẽ không hiểu vì sao không
+           ăn. Nay chỉ mục Báo cáo tự lo ngày của nó.
+
+           KHÔNG ĐỤNG: mpDotTu/mpDotDen (mục Đã mua) và mtTu/mtDen (mục Trả
+           tiền) vẫn mặc định đầu tháng -> hôm nay như cũ.
+
   V1.18.0  BÁO CÁO GỌN LẠI + NĂM NÚT CHỌN NHANH NGÀY.
            (md5 ghi ở BAN-GIAO-TONG-THE)
 
@@ -1329,7 +1349,7 @@
   <div class="brand-row">
     <div class="brand">
       <div class="brand-title">⚖️ Cân Tôm</div>
-      <div class="brand-status"><span class="ver-badge">V1.18.0</span> · <span id="cloudStatus"></span></div>
+      <div class="brand-status"><span class="ver-badge">V1.18.1</span> · <span id="cloudStatus"></span></div>
     </div>
     <div id="currentUserBar" class="hidden brand-user">
       <span>👤 <span id="currentUserNameLabel"></span></span>
@@ -5744,9 +5764,12 @@ function mpNgayVN(dateKey){
 function moTabMuaPhieu(){
   const oNgay = document.getElementById('mpNgay');
   if(oNgay && !oNgay.value) oNgay.value = mpHomQuaKey();
-  // V1.15.0 — mặc định khoảng ngày cho ba mục mới: đầu tháng tới hôm nay
+  // V1.15.0 — mặc định khoảng ngày: đầu tháng tới hôm nay.
+  // V1.18.1 — BỎ mbTu/mbDen ra khỏi đây. Mục Báo cáo tự đặt ngày của nó
+  // (mở lần đầu = Hôm qua). Để hai nơi cùng đặt thì sau này sửa một chỗ
+  // sẽ không hiểu vì sao không ăn.
   const h = todayKey(), d1 = h.slice(0,8) + '01';
-  [['mpDotTu',d1],['mpDotDen',h],['mtTu',d1],['mtDen',h],['mbTu',d1],['mbDen',h]].forEach(([id,v])=>{
+  [['mpDotTu',d1],['mpDotDen',h],['mtTu',d1],['mtDen',h]].forEach(([id,v])=>{
     const e = document.getElementById(id); if(e && !e.value) e.value = v;
   });
   mpNapNguoiCan();
@@ -5823,7 +5846,14 @@ function mpDoiMuc(muc){
   if(muc==='nhap') renderMnBang();
   if(muc==='dot')  renderMpDot();
   if(muc==='thu')  renderMpThu();
-  if(muc==='bc')   renderMpBaoCao();
+  if(muc==='bc'){
+    /* V1.18.1 — mở mục Báo cáo LẦN ĐẦU trong phiên thì nhảy thẳng vào
+       "Hôm qua" (số chủ cần nhìn khi đi trả công). Những lần sau giữ đúng
+       lựa chọn của người dùng, không kéo về giữa chừng.
+       mbChonNhanh() tự gọi renderMpBaoCao() nên không vẽ hai lần. */
+    if(!mbDaMoLanDau){ mbDaMoLanDau = true; mbChonNhanh('hqua'); }
+    else renderMpBaoCao();
+  }
 }
 
 function mpDoiNgay(){
@@ -7033,6 +7063,9 @@ function mbDoiMuc(m){
 const MB_NHANH = [['hqua','mbChipHqua'], ['hkia','mbChipHkia'], ['tnay','mbChipTnay'],
                   ['ttruoc','mbChipTtruoc'], ['tatca','mbChipTatca']];
 let mbNhanh = '';     // nút đang sáng; '' = người dùng tự chọn ngày
+/* V1.18.1 — chỉ nhảy vào "Hôm qua" ở LẦN MỞ ĐẦU TIÊN trong phiên. Bỏ cờ này
+   đi là thành luôn về Hôm qua mỗi lần mở mục Báo cáo. */
+let mbDaMoLanDau = false;
 function mbYmd(d){
   const p = v => String(v).padStart(2,'0');
   return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
