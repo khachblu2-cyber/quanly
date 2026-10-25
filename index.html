@@ -1,7 +1,7 @@
 <!--
 ================================================================================
   BÀN GIAO — APP CÂN TÔM (Tính tiền công nhật)
-  Phiên bản: V1.17.0    Cập nhật: 24/10/2026
+  Phiên bản: V1.18.0    Cập nhật: 25/10/2026
 --------------------------------------------------------------------------------
   TÀI LIỆU NÀY NẰM NGAY TRONG FILE, KHÔNG BAO GIỜ LỆCH VỚI CODE.
   Mỗi lần sửa file BẮT BUỘC cập nhật luôn phần này (số phiên bản + dòng
@@ -713,6 +713,42 @@
            KHÔNG ĐỤNG: công thức tính tiền, kho dữ liệu, quyền, Cloud
            Function, cách đọc file Excel.
 
+  V1.18.0  BÁO CÁO GỌN LẠI + NĂM NÚT CHỌN NHANH NGÀY.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           (a) BẢNG TỔNG HỢP bỏ hai cột "Đợt" và "Lượt", bỏ luôn dòng chú
+               thích dài bên dưới. Lý do: 6 cột quá rộng cho điện thoại,
+               cột "Thực trả" — con số quan trọng nhất — bị đẩy ra ngoài
+               màn hình, phải vuốt ngang mới thấy. Còn 4 cột thì vừa khít.
+               Chủ đã xác nhận không dùng tới hai cột đó.
+
+           (b) TỜ IN báo cáo tổng hợp cũng bỏ hai cột, để in ra giống hệt
+               cái nhìn trên màn hình.
+
+           (c) FILE EXCEL GIỮ NGUYÊN hai cột — Excel là file để đối chiếu,
+               thêm cột không vướng, mà cột "Số đợt" còn giúp phát hiện hôm
+               nào nhập trùng.
+
+           (d) MỤC CHI TIẾT GIỮ NGUYÊN cột "Lượt". Ở đó nó là số người của
+               ĐÚNG MỘT đợt, không phải cộng dồn nhiều ngày — nghĩa khác
+               hẳn bảng tổng hợp, và bảng đó không bị chật.
+
+           (e) NĂM NÚT CHỌN NHANH: Hôm qua · Hôm kia · Tháng này · Tháng
+               trước · Tất cả. Bấm -> hai ô ngày tự điền. Sửa tay một ô ->
+               nút tự bỏ sáng, quay về chọn ngày tự do.
+               "Tất cả" = để TRỐNG cả hai ô; mpLocDot() đã bỏ qua điều kiện
+               ngày khi tham số rỗng nên không phải sửa hàm lọc.
+               CỐ Ý KHÔNG có nút "Hôm nay" — chủ không cần, và mở mục Báo
+               cáo lần đầu vốn đã mặc định hai ô ngày = hôm nay.
+               Khoảng rỗng thì tiêu đề tờ in / Excel ghi "Tất cả các ngày"
+               thay vì "Từ ngày  đến ngày " (mpNgayVN('') trả chuỗi rỗng).
+
+           (f) Mục Trả tiền: "Công ty còn nợ anh" -> "Công ty còn nợ".
+               Phần lãi giữ nguyên theo yêu cầu.
+
+           KHÔNG ĐỤNG: công thức tiền, phí 1%, trừ công nợ, phân quyền
+           V1.17.0, danh sách xưởng/công ty, Cloud Function.
+
   V1.17.0  PHÂN QUYỀN TỪNG MỤC CON CỦA TAB MUA PHIẾU.
            (md5 ghi ở BAN-GIAO-TONG-THE)
 
@@ -1037,6 +1073,12 @@
   .section-tab{display:flex;gap:6px;margin-bottom:12px;}
   .section-tab button{flex:1;padding:8px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer;}
   .section-tab button.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+  /* V1.18.0 — nút chọn nhanh khoảng ngày ở mục Báo cáo. Dạng viên thuốc,
+     tự xuống hàng khi màn hình hẹp. */
+  .mb-chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px;}
+  .mb-chip{padding:7px 13px;border-radius:20px;border:1px solid var(--line);background:#fff;
+    color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer;font-family:inherit;}
+  .mb-chip.on{background:var(--blue);color:#fff;border-color:var(--blue);}
   /* ===== MÀN HÌNH ĐĂNG NHẬP ===== */
   #userPickerOverlay{
     position:fixed;inset:0;z-index:997;overflow-y:auto;
@@ -1287,7 +1329,7 @@
   <div class="brand-row">
     <div class="brand">
       <div class="brand-title">⚖️ Cân Tôm</div>
-      <div class="brand-status"><span class="ver-badge">V1.17.0</span> · <span id="cloudStatus"></span></div>
+      <div class="brand-status"><span class="ver-badge">V1.18.0</span> · <span id="cloudStatus"></span></div>
     </div>
     <div id="currentUserBar" class="hidden brand-user">
       <span>👤 <span id="currentUserNameLabel"></span></span>
@@ -1746,10 +1788,19 @@
         <button class="active" id="mbSegTh" onclick="mbDoiMuc('th')">Tổng hợp</button>
         <button id="mbSegCt" onclick="mbDoiMuc('ct')">Chi tiết</button>
       </div>
+      <!-- V1.18.0 — năm nút chọn nhanh. Không có "Hôm nay": mở mục này lần
+           đầu vốn đã mặc định hai ô ngày = hôm nay. -->
+      <div class="mb-chiprow">
+        <button class="mb-chip" id="mbChipHqua"   onclick="mbChonNhanh('hqua')">Hôm qua</button>
+        <button class="mb-chip" id="mbChipHkia"   onclick="mbChonNhanh('hkia')">Hôm kia</button>
+        <button class="mb-chip" id="mbChipTnay"   onclick="mbChonNhanh('tnay')">Tháng này</button>
+        <button class="mb-chip" id="mbChipTtruoc" onclick="mbChonNhanh('ttruoc')">Tháng trước</button>
+        <button class="mb-chip" id="mbChipTatca"  onclick="mbChonNhanh('tatca')">Tất cả</button>
+      </div>
       <div class="card">
         <div class="row">
-          <div class="field"><label>Từ ngày</label><input type="date" id="mbTu" onchange="renderMpBaoCao()"></div>
-          <div class="field"><label>Đến ngày</label><input type="date" id="mbDen" onchange="renderMpBaoCao()"></div>
+          <div class="field"><label>Từ ngày</label><input type="date" id="mbTu" onchange="mbSuaNgayTay()"></div>
+          <div class="field"><label>Đến ngày</label><input type="date" id="mbDen" onchange="mbSuaNgayTay()"></div>
           <div class="field" id="mbXuongWrap"><label>Xưởng</label><select id="mbXuong" onchange="renderMpBaoCao()"></select></div>
         </div>
       </div>
@@ -6855,7 +6906,7 @@ function renderMpThu(){
 
   if(mtCheDo==='chua'){
     tw.innerHTML = `<div class="card" style="margin-top:8px;background:#FDEAE7;border-color:#E8B4AD;">
-      <div style="font-size:12.5px;font-weight:700;color:#8E2018;">⚠️ Công ty còn nợ anh</div>
+      <div style="font-size:12.5px;font-weight:700;color:#8E2018;">⚠️ Công ty còn nợ</div>
       <div style="font-size:21px;font-weight:700;color:#8E2018;margin-top:2px;">${formatNumber(tTien)} đ</div>
       <div class="muted" style="font-size:11.5px;margin-top:3px;">${ds.length} đợt · đã ứng ra ${formatNumber(tNhan)} · lãi ${formatNumber(tPhi)}</div>
     </div>`;
@@ -6974,6 +7025,51 @@ function mbDoiMuc(m){
   renderMpBaoCao();
 }
 
+/* =====================================================================
+   V1.18.0 — NĂM NÚT CHỌN NHANH KHOẢNG NGÀY
+   "Tất cả" đặt hai ô rỗng; mpLocDot() vốn đã bỏ qua điều kiện ngày khi
+   tham số rỗng nên không phải sửa hàm lọc.
+   ===================================================================== */
+const MB_NHANH = [['hqua','mbChipHqua'], ['hkia','mbChipHkia'], ['tnay','mbChipTnay'],
+                  ['ttruoc','mbChipTtruoc'], ['tatca','mbChipTatca']];
+let mbNhanh = '';     // nút đang sáng; '' = người dùng tự chọn ngày
+function mbYmd(d){
+  const p = v => String(v).padStart(2,'0');
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
+}
+function mbKhoangNhanh(key){
+  const n = new Date();
+  if(key === 'hqua'){ const a = new Date(n); a.setDate(a.getDate()-1); return [mbYmd(a), mbYmd(a)]; }
+  if(key === 'hkia'){ const a = new Date(n); a.setDate(a.getDate()-2); return [mbYmd(a), mbYmd(a)]; }
+  if(key === 'tnay'){ return [mbYmd(new Date(n.getFullYear(), n.getMonth(), 1)), mbYmd(n)]; }
+  if(key === 'ttruoc'){
+    // ngày 0 của tháng này = ngày cuối tháng trước, kể cả tháng 28/29/30/31 ngày
+    return [mbYmd(new Date(n.getFullYear(), n.getMonth()-1, 1)),
+            mbYmd(new Date(n.getFullYear(), n.getMonth(), 0))];
+  }
+  return ['',''];     // tatca
+}
+function mbVeNutNhanh(){
+  MB_NHANH.forEach(([k,id])=>{ const e = document.getElementById(id); if(e) e.classList.toggle('on', mbNhanh===k); });
+}
+function mbChonNhanh(key){
+  mbNhanh = key;
+  const [tu,den] = mbKhoangNhanh(key);
+  const a = document.getElementById('mbTu'), b = document.getElementById('mbDen');
+  if(a) a.value = tu;
+  if(b) b.value = den;
+  mbVeNutNhanh();
+  renderMpBaoCao();
+}
+/* Sửa tay một ô ngày -> bỏ sáng nút, quay về chọn ngày tự do */
+function mbSuaNgayTay(){ mbNhanh = ''; mbVeNutNhanh(); renderMpBaoCao(); }
+/* Nhãn khoảng ngày cho tờ in và file Excel. Rỗng = Tất cả. */
+function mbNhanKy(tu, den){
+  if(!tu && !den) return 'Tất cả các ngày';
+  if(tu && den)   return 'Từ ngày ' + mpNgayVN(tu) + ' đến ngày ' + mpNgayVN(den);
+  return tu ? ('Từ ngày ' + mpNgayVN(tu)) : ('Đến ngày ' + mpNgayVN(den));
+}
+
 function mbDuLieu(){
   const tu    = (document.getElementById('mbTu')   ||{}).value || '';
   const den   = (document.getElementById('mbDen')  ||{}).value || '';
@@ -7002,6 +7098,12 @@ function mbDuLieu(){
 function renderMpBaoCao(){
   const wrap = document.getElementById('mbBangWrap');
   if(!wrap) return;
+  /* V1.18.0 — ô chọn Xưởng chỉ có tác dụng ở mục Chi tiết (mbDuLieu bỏ qua
+     nó khi đang xem Tổng hợp). Trước đây chỉ mbDoiMuc() mới ẩn nó, nên mở
+     Báo cáo lần đầu là ô vẫn hiện ở Tổng hợp dù bấm vào chẳng đổi gì.
+     Đặt ở đây để lần vẽ nào cũng đúng. */
+  const xw = document.getElementById('mbXuongWrap');
+  if(xw) xw.style.display = (mbMuc === 'ct') ? '' : 'none';
   const d = mbDuLieu();
   if(!d.rows.length){ wrap.innerHTML = `<div class="empty-state">Không có đợt nào trong khoảng này</div>`; return; }
 
@@ -7011,24 +7113,19 @@ function renderMpBaoCao(){
       { soDot:0, soNguoi:0, tongTien:0, tongPhi:0, tongNhan:0 });
     wrap.innerHTML = `
       <table class="debt-report-table" style="margin-top:9px;">
-        <thead><tr><th style="text-align:left;">Xưởng</th><th>Đợt</th><th>Lượt</th>
+        <thead><tr><th style="text-align:left;">Xưởng</th>
           <th>Tiền công</th><th>Phí</th><th>Thực trả</th></tr></thead>
         <tbody>${d.rows.map(r=>`<tr>
             <td style="text-align:left;">${mpNhanXuong(r.xuong)} ${escapeHtml((mxTim(r.xuong)||{}).ten || '')}</td>
-            <td>${formatNumber(r.soDot)}</td><td>${formatNumber(r.soNguoi)}</td>
             <td>${formatNumber(r.tongTien)}</td>
             <td style="color:var(--amber);font-weight:600;">${formatNumber(r.tongPhi)}</td>
             <td style="color:var(--moss);font-weight:700;">${formatNumber(r.tongNhan)}</td>
           </tr>`).join('')}
           <tr class="total-row"><td style="text-align:left;">TỔNG CỘNG</td>
-            <td>${formatNumber(t.soDot)}</td><td>${formatNumber(t.soNguoi)}</td>
             <td>${formatNumber(t.tongTien)}</td><td>${formatNumber(t.tongPhi)}</td>
             <td>${formatNumber(t.tongNhan)}</td></tr>
         </tbody>
-      </table>
-      <div class="muted" style="font-size:11.5px;margin-top:7px;line-height:1.5;">
-        Cột <b>Lượt</b> đếm số lượt người của từng đợt cộng lại, không phải số đầu người —
-        một người làm ba ngày tính ba lượt.</div>`;
+      </table>`;
   }else{
     const t = d.rows.reduce((a,r)=>({ soNguoi:a.soNguoi+(Number(r.soNguoi)||0),
       tongTien:a.tongTien+(Number(r.tongTien)||0), tongPhi:a.tongPhi+(Number(r.tongPhi)||0),
@@ -7058,18 +7155,19 @@ function renderMpBaoCao(){
 function mbIn(){
   const d = mbDuLieu();
   if(!d.rows.length){ alert('Không có dữ liệu để in'); return; }
-  const ky = 'Từ ngày ' + mpNgayVN(d.tu) + ' đến ngày ' + mpNgayVN(d.den);
+  const ky = mbNhanKy(d.tu, d.den);   // V1.18.0 — rỗng = "Tất cả các ngày"
   let head, body, tong;
   if(mbMuc === 'th'){
-    const t = d.rows.reduce((a,r)=>({ soDot:a.soDot+r.soDot, soNguoi:a.soNguoi+r.soNguoi,
-      tongTien:a.tongTien+r.tongTien, tongPhi:a.tongPhi+r.tongPhi, tongNhan:a.tongNhan+r.tongNhan }),
-      { soDot:0, soNguoi:0, tongTien:0, tongPhi:0, tongNhan:0 });
-    head = '<tr><th style="text-align:left;">Xưởng</th><th>Số đợt</th><th>Lượt người</th><th>Tiền công</th><th>Phí</th><th>Thực trả</th></tr>';
+    /* V1.18.0 — bỏ "Số đợt" và "Lượt người" để tờ in giống hệt màn hình. */
+    const t = d.rows.reduce((a,r)=>({ tongTien:a.tongTien+r.tongTien,
+      tongPhi:a.tongPhi+r.tongPhi, tongNhan:a.tongNhan+r.tongNhan }),
+      { tongTien:0, tongPhi:0, tongNhan:0 });
+    head = '<tr><th style="text-align:left;">Xưởng</th><th>Tiền công</th><th>Phí</th><th>Thực trả</th></tr>';
     body = d.rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(mxTen(r.xuong))}</td>
-      <td>${formatNumber(r.soDot)}</td><td>${formatNumber(r.soNguoi)}</td><td>${formatNumber(r.tongTien)}</td>
+      <td>${formatNumber(r.tongTien)}</td>
       <td>${formatNumber(r.tongPhi)}</td><td>${formatNumber(r.tongNhan)}</td></tr>`).join('');
-    tong = `<tr class="total-row"><td style="text-align:left;">TỔNG CỘNG</td><td>${formatNumber(t.soDot)}</td>
-      <td>${formatNumber(t.soNguoi)}</td><td>${formatNumber(t.tongTien)}</td>
+    tong = `<tr class="total-row"><td style="text-align:left;">TỔNG CỘNG</td>
+      <td>${formatNumber(t.tongTien)}</td>
       <td>${formatNumber(t.tongPhi)}</td><td>${formatNumber(t.tongNhan)}</td></tr>`;
   }else{
     const t = d.rows.reduce((a,r)=>({ soNguoi:a.soNguoi+(Number(r.soNguoi)||0),
@@ -7105,7 +7203,7 @@ function mbXuatExcel(){
   aoa.push([]);
   aoa.push([mbMuc==='th' ? 'BÁO CÁO MUA PHIẾU — TỔNG HỢP THEO XƯỞNG'
                          : 'BÁO CÁO MUA PHIẾU — CHI TIẾT THEO ĐỢT']);
-  aoa.push(['Từ ngày ' + mpNgayVN(d.tu) + ' đến ngày ' + mpNgayVN(d.den)]);
+  aoa.push([mbNhanKy(d.tu, d.den)]);   // V1.18.0 — rỗng = 'Tất cả các ngày'
   aoa.push([]);
   let dong0, soCotTien;
   if(mbMuc === 'th'){
