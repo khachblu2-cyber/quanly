@@ -1,7 +1,7 @@
 <!--
 ================================================================================
   BÀN GIAO — APP CÂN TÔM (Tính tiền công nhật)
-  Phiên bản: V1.18.1    Cập nhật: 25/10/2026
+  Phiên bản: V1.19.0    Cập nhật: 20/11/2026
 --------------------------------------------------------------------------------
   TÀI LIỆU NÀY NẰM NGAY TRONG FILE, KHÔNG BAO GIỜ LỆCH VỚI CODE.
   Mỗi lần sửa file BẮT BUỘC cập nhật luôn phần này (số phiên bản + dòng
@@ -713,6 +713,64 @@
            KHÔNG ĐỤNG: công thức tính tiền, kho dữ liệu, quyền, Cloud
            Function, cách đọc file Excel.
 
+  V1.19.0  MỘT MÃ HAI NGƯỜI CÂN — TRẢ THIẾU. VÁ GỐC.
+           (md5 ghi ở BAN-GIAO-TONG-THE)
+
+           CA THẬT: 19/11/2026, mã 03032 cân ở hai điểm trong cùng một ngày —
+           Cẩm Nhung X2 278.000đ và Nguyễn Luyến X1 170.000đ, tổng ngày
+           448.000đ. Trước đó 16/11 cũng dính (mã 411), nhưng ca đó là cân
+           nhầm nên xoá được; ca 19/11 là làm thật ở hai nơi.
+
+           GỐC LỖI — mpDungBang() lọc phiếu theo người cân TRƯỚC rồi mới cộng
+           tiền công ngày:
+               if(nguoiCan && w.byUserId !== nguoiCan) return;   // lọc
+               ...
+               tienCong = tronNghin(base + bonus);               // rồi mới tính
+           Nhưng tiền công ngày phải cộng trên TOÀN BỘ phiếu của ngày, y như
+           công nợ tính. Lọc trước thành ra cắt đôi một ngày công.
+
+           HẬU QUẢ NẶNG NHẤT — phiếu chi ghi:
+               amount: r.tienCong      // chỉ phần của MỘT người cân
+               paidDates: [dateKey]    // nhưng đánh dấu CẢ NGÀY đã trả
+           In đợt Cẩm Nhung trước -> cả ngày 19/11 bị đánh dấu đã trả -> sang
+           đợt Nguyễn Luyến mã 03032 rơi xuống mục "đã nhận", 170.000đ KHÔNG
+           BAO GIỜ hiện lại ở Mua phiếu. Tiền vẫn nằm trong công nợ nhưng chỉ
+           lấy lại được nếu có người để ý — thực tế là bị bỏ quên.
+           Phụ: làm tròn hai lần trên hai phần lẻ, và 10% tăng ca cũng tính
+           trên phần lẻ, nên lệch thêm vài nghìn.
+
+           CÁCH VÁ (chủ chọn "cách A" sau khi xem mockup):
+           Tiền công tính theo CẢ NGÀY. Người cân chỉ còn dùng để quyết định
+           AI XUẤT HIỆN, không dùng để cắt tiền nữa.
+           Người dính nhiều điểm chỉ hiện ở danh sách của NGƯỜI CÂN CHÍNH,
+           với ĐỦ tiền cả ngày. Các đợt khác không có họ nhưng có dòng báo rõ.
+
+           NGƯỜI CÂN CHÍNH chọn hai bước, CỐ Ý không gộp làm một:
+             1. Xưởng chính  = xưởng nhiều tiền nhất
+             2. Người chính  = người cân nhiều tiền nhất TRONG xưởng chính
+           Làm một bước (chỉ lấy người cân nhiều tiền nhất) sẽ sai khi một
+           xưởng có hai người cân: X1 có Luyến 100 + Thanh 100 = 200 còn X2 có
+           Nhung 150 -> xưởng chính đúng ra là X1, nhưng người nhiều tiền nhất
+           lại là Nhung (X2) -> dòng nằm ở danh sách X2 mà tờ in ghi X1.
+           Hai bước thì danh sách và tờ in luôn khớp.
+           Bằng nhau thì xếp theo mã cho ổn định, không phụ thuộc thứ tự phiếu.
+
+           VÌ SAO GỘP XƯỞNG LÀ CHẤP NHẬN ĐƯỢC: mọi xưởng CÂN TRONG APP đều
+           thuộc Châu Bá Thảo (X1, X2, X7 — noiBo:true). X3 Châu Cẩm, X4 và
+           TK1 Tấn Khởi đều nhập từ Excel, không bao giờ trộn với phiếu cân.
+           Nên một người dính hai xưởng luôn nằm TRONG MỘT pháp nhân — tờ in
+           không thể sai công ty, chỉ lệch phân bổ nội bộ giữa hai xưởng.
+           Nỗi lo "tờ in sai pháp nhân" của V1.16.0 không áp dụng ở đây.
+
+           VÌ SAO KHÔNG CHIA ĐÔI THEO XƯỞNG: tiền công ngày là MỘT số đã làm
+           tròn, và paidDates đánh dấu theo NGÀY chứ không theo xưởng. Chia ra
+           thì làm tròn hai lần ra số khác, và paidDates không diễn tả được
+           "đã trả phần X1, còn nợ phần X2" -> nguy cơ trả hai lần. Muốn chia
+           thật phải đổi paidDates thành ngày+xưởng, tức đụng lõi công nợ.
+
+           KHÔNG ĐỤNG: công thức tiền, phí 1%, paidDates, cách tách đợt theo
+           xưởng khi in, phân quyền V1.17.0, danh sách xưởng/công ty.
+
   V1.18.1  MỞ MỤC BÁO CÁO LÀ THẤY NGAY HÔM QUA.
            (md5 ghi ở BAN-GIAO-TONG-THE)
 
@@ -1341,6 +1399,10 @@
     font-size:12.5px;color:var(--blue-dk);line-height:1.5;}
   .mp-dong{display:flex;justify-content:space-between;font-size:13.5px;padding:3px 0;}
   .mp-dong b{font-variant-numeric:tabular-nums;}
+  /* V1.19.0 — nhãn nhỏ cạnh tên: dòng này đã gom tiền từ điểm cân khác. */
+  .mp-gop{display:inline-block;margin-left:5px;padding:1px 6px;border-radius:9px;
+    background:#FFF3DC;border:1px solid #F0D9A8;color:#8A6418;
+    font-size:10.5px;font-weight:700;white-space:nowrap;vertical-align:middle;}
 </style>
 </head>
 <body>
@@ -1349,7 +1411,7 @@
   <div class="brand-row">
     <div class="brand">
       <div class="brand-title">⚖️ Cân Tôm</div>
-      <div class="brand-status"><span class="ver-badge">V1.18.1</span> · <span id="cloudStatus"></span></div>
+      <div class="brand-status"><span class="ver-badge">V1.19.0</span> · <span id="cloudStatus"></span></div>
     </div>
     <div id="currentUserBar" class="hidden brand-user">
       <span>👤 <span id="currentUserNameLabel"></span></span>
@@ -5900,23 +5962,33 @@ function mpDungBang(){
   const dateKey  = (document.getElementById('mpNgay') || {}).value || '';
   const nguoiCan = (document.getElementById('mpNguoiCan') || {}).value || '';
   if(!dateKey || mpNgayDaTai !== dateKey){
-    return { dateKey, nguoiCan, rows:[], daChi:[], chuaTai:true };
+    return { dateKey, nguoiCan, rows:[], daChi:[], biGop:[], chuaTai:true };
   }
   const ngayTangCa = new Set(
     overtimeDays.filter(o=>o && o.dateKey===dateKey).map(o=>String(o.employeeId)));
 
   const cong = {};
-  const theoXuong = {};   // V1.16.0 — eid -> { mã xưởng: tiền }
+  const theoXuong = {};      // V1.16.0 — eid -> { mã xưởng: tiền }
+  const theoNguoi = {};      // V1.19.0 — eid -> { người cân: tiền }
+  const xuongCuaNguoi = {};  // V1.19.0 — người cân -> mã xưởng
   mpPhieuNgay.forEach(w=>{
     if(!w || w.dateKey !== dateKey) return;
-    if(nguoiCan && String(w.byUserId || '') !== nguoiCan) return;
+    /* V1.19.0 — ĐÃ BỎ dòng lọc theo người cân ở đây.
+       Trước: lọc phiếu theo người cân RỒI mới cộng -> cắt đôi một ngày công,
+       in ra thiếu tiền, mà paidDates vẫn đánh dấu cả ngày đã trả.
+       Nay: cộng TOÀN BỘ phiếu của ngày, y như công nợ tính. Người cân chỉ
+       dùng để quyết định AI XUẤT HIỆN, xử lý ở vòng dưới. */
     const eid = String(w.employeeId || '');
     if(!eid) return;
+    const uid  = String(w.byUserId || '');
     const tien = Number(w.amount) || 0;
+    const x    = mxCuaTaiKhoan(uid);
+    xuongCuaNguoi[uid] = x;
     cong[eid] = (cong[eid] || 0) + tien;
-    const x = mxCuaTaiKhoan(String(w.byUserId || ''));
     if(!theoXuong[eid]) theoXuong[eid] = {};
     theoXuong[eid][x] = (theoXuong[eid][x] || 0) + tien;
+    if(!theoNguoi[eid]) theoNguoi[eid] = {};
+    theoNguoi[eid][uid] = (theoNguoi[eid][uid] || 0) + tien;
   });
 
   // Ai đã nhận tiền của đúng ngày này rồi — dù trả bằng máy quét hay mua phiếu
@@ -5926,7 +5998,7 @@ function mpDungBang(){
     if(p.paidDates.indexOf(dateKey) >= 0) daTra.add(String(p.employeeId));
   });
 
-  const rows = [], daChi = [];
+  const rows = [], daChi = [], biGop = [];
   Object.keys(cong).forEach(eid=>{
     const base  = cong[eid];
     const bonus = ngayTangCa.has(eid) ? Math.round(base * 0.1) : 0;
@@ -5934,20 +6006,54 @@ function mpDungBang(){
     if(tienCong <= 0) return;
     const e = employees.find(x=>x.id === eid);
     const phi = mpTinhPhi(tienCong);
-    /* V1.16.0 — xưởng của dòng này là xưởng của người cân nhiều tiền nhất
-       cho người đó trong ngày. Thực tế một công nhân chỉ cân ở một điểm.
-       Nếu dính hai xưởng thì ĐÁNH DẤU để cảnh báo chứ KHÔNG tự chia đôi:
-       chia đôi sẽ lệch làm tròn và sinh nguy cơ trả hai lần cùng một ngày. */
+    /* Xưởng của dòng này = xưởng nhiều tiền nhất trong ngày. KHÔNG chia đôi:
+       chia ra sẽ lệch làm tròn và paidDates không diễn tả được "đã trả phần
+       X1, còn nợ phần X2" -> nguy cơ trả hai lần. */
     const tx  = theoXuong[eid] || {};
-    const dsX = Object.keys(tx).sort((a,b)=> tx[b] - tx[a]);
+    const dsX = Object.keys(tx).sort((a,b)=> (tx[b] - tx[a]) || String(a).localeCompare(String(b)));
+    const xg  = dsX[0] || '';
+
+    /* V1.19.0 — NGƯỜI CÂN CHÍNH: nhiều tiền nhất TRONG XƯỞNG CHÍNH.
+       Hai bước chứ không một bước. Nếu chỉ lấy người cân nhiều tiền nhất
+       toàn cục thì sai khi một xưởng có hai người cân: X1 có Luyến 100 +
+       Thanh 100 = 200 còn X2 có Nhung 150 -> xưởng chính là X1 nhưng người
+       nhiều tiền nhất lại là Nhung (X2) -> dòng nằm ở danh sách X2 mà tờ in
+       ghi X1. Hai bước thì danh sách và tờ in luôn khớp. */
+    const tn  = theoNguoi[eid] || {};
+    const dsN = Object.keys(tn)
+      .filter(u => xuongCuaNguoi[u] === xg)
+      .sort((a,b)=> (tn[b] - tn[a]) || String(a).localeCompare(String(b)));
+    const nguoiChinh = dsN[0] || '';
+    const dsNguoi    = Object.keys(tn);
+
+    /* V1.19.0 — CHỐT CHẶN: gộp xưởng chỉ chấp nhận được khi mấy xưởng đó
+       CÙNG MỘT CÔNG TY (X1, X2, X7 đều CBT nên gộp không sai pháp nhân).
+       Nếu một mã dính hai công ty (ví dụ X2 của CBT và X3 của Châu Cẩm) thì
+       gộp cả ngày vào một tờ là ghi tiền sai pháp nhân. Không tự chia, chỉ
+       báo đỏ để người làm xoá phiếu cân nhầm rồi tính lại. */
+    const dsCty = [...new Set(dsX.map(x=>{ const o = mxTim(x); return o ? String(o.cty || '') : ''; }))];
+
     const r = { employeeId: eid, code: e ? e.code : '', name: e ? e.name : '(không rõ)',
                 tienCong, phi, thucNhan: tienCong - phi,
-                xuong: dsX[0] || '', nhieuXuong: dsX.length > 1 };
+                xuong: xg, nhieuXuong: dsX.length > 1,
+                // V1.19.0
+                nguoiChinh, dinhNhieuDiem: dsNguoi.length > 1,
+                xuongKhac: dsX.slice(1),
+                khacCty: dsCty.length > 1, dsCty };
+
+    /* V1.19.0 — lọc HIỂN THỊ (không còn lọc tiền). Người dính nhiều điểm chỉ
+       hiện ở đợt của người cân chính, với ĐỦ tiền cả ngày. Các đợt khác có
+       cân họ thì không hiện nhưng được báo lại qua biGop, để không ai tưởng
+       bị sót người. */
+    if(nguoiCan && nguoiChinh !== nguoiCan){
+      if(tn[nguoiCan]) biGop.push(r);
+      return;
+    }
     if(daTra.has(eid)) daChi.push(r); else rows.push(r);
   });
   const theoMa = (a,b)=> String(a.code).localeCompare(String(b.code), 'vi', { numeric:true });
-  rows.sort(theoMa); daChi.sort(theoMa);
-  return { dateKey, nguoiCan, rows, daChi, chuaTai:false };
+  rows.sort(theoMa); daChi.sort(theoMa); biGop.sort(theoMa);
+  return { dateKey, nguoiCan, rows, daChi, biGop, chuaTai:false };
 }
 
 function mpDaChon(rows){ return rows.filter(r=>!mpBoChon.has(r.employeeId)); }
@@ -6017,7 +6123,27 @@ function renderMuaPhieu(){
         nên ô chọn công ty tạm khoá.</div>` : '')
     + (chuaGan ? `<div class="mp-tin" style="background:#FDEAE7;border-color:#E8B4AD;color:#8E2018;margin-top:7px;">
         Có phiếu của tài khoản <b>chưa gán xưởng</b>. Vào Cài đặt › Người dùng gán xưởng cho họ,
-        nếu không báo cáo sẽ gom vào nhóm “(chưa gán)”.</div>` : '');
+        nếu không báo cáo sẽ gom vào nhóm “(chưa gán)”.</div>` : '')
+    /* V1.19.0 — báo đỏ: gộp mà dính hai công ty thì tờ in ghi sai pháp nhân. */
+    + (() => {
+        const xau = d.rows.filter(r=>r.khacCty);
+        if(!xau.length) return '';
+        return `<div class="mp-tin" style="background:#FDEAE7;border-color:#E8B4AD;color:#8E2018;margin-top:7px;">
+          ⛔ <b>${xau.length} người cân ở hai công ty khác nhau trong cùng ngày</b> — tiền đang gộp về
+          một tờ nên tờ in sẽ ghi sai công ty.
+          ${xau.map(r=>`<br>Mã <b>${escapeHtml(r.code)} — ${escapeHtml(r.name)}</b>:
+            ${escapeHtml([r.xuong].concat(r.xuongKhac).map(mpTenXuongNgan).join(' + '))}
+            (${escapeHtml(r.dsCty.map(c=>c||'chưa khai').join(' / '))})`).join('')}
+          <br>Xoá phiếu cân nhầm ở bên sai rồi mở lại mục này trước khi trả tiền.</div>`;
+      })()
+    /* V1.19.0 — báo ai đã gộp sang đợt khác, để không ai tưởng bị sót người.
+       Chỉ hiện khi đang lọc theo MỘT người cân; chọn "Tất cả" thì không ai
+       bị gộp đi đâu cả. */
+    + (d.biGop && d.biGop.length ? `<div class="mp-tin" style="background:#FFF8EC;border-color:#F0D9A8;color:#8A6418;margin-top:7px;">
+        ℹ️ <b>${d.biGop.length} người đã gộp sang đợt khác:</b>
+        ${d.biGop.map(r=>`<br>Mã <b>${escapeHtml(r.code)} — ${escapeHtml(r.name)}</b> cân cả ở
+          <b>${escapeHtml(mpTenXuongNgan(r.xuong))}</b>, tiền cả ngày
+          <b>${formatNumber(r.tienCong)}đ</b> nằm trọn trong đợt bên đó.`).join('')}</div>` : '');
 
   if(d.rows.length === 0){
     wrap.innerHTML = `<div class="empty-state">Không còn ai chưa nhận tiền của ngày ${mpNgayVN(d.dateKey)}</div>`;
@@ -6028,7 +6154,11 @@ function renderMuaPhieu(){
         <td style="text-align:center;"><input type="checkbox" ${mpBoChon.has(r.employeeId)?'':'checked'}
             onchange="mpTick('${escapeHtml(r.employeeId)}', this.checked)"></td>
         <td style="text-align:center;" class="font-mono">${escapeHtml(r.code)}</td>
-        <td style="text-align:left;">${escapeHtml(r.name)}</td>
+        <td style="text-align:left;">${escapeHtml(r.name)}${
+          /* V1.19.0 — nhãn cho biết dòng này đã gom tiền từ điểm cân khác. */
+          r.dinhNhieuDiem && r.xuongKhac.length
+            ? `<span class="mp-gop">gộp từ ${escapeHtml(r.xuongKhac.map(mpTenXuongNgan).join(', '))}</span>`
+            : ''}</td>
         <td>${formatNumber(r.tienCong)}</td>
         <td style="color:var(--amber);">${formatNumber(r.phi)}</td>
         <td style="color:var(--moss);font-weight:600;">${formatNumber(r.thucNhan)}</td>
@@ -6245,6 +6375,12 @@ function mxDanhSach(){
 }
 function mxTim(ma){ return mxDanhSach().find(x=>x.ma === ma) || null; }
 function mxTen(ma){ const x = mxTim(ma); return x ? (x.ma + (x.ten ? ' — ' + x.ten : '')) : (ma || '(chưa rõ)'); }
+/* V1.19.0 — tên xưởng CỰC NGẮN, chỉ để nhét vào ô bảng vốn đã chật.
+   Trả về đúng mã ("X2"), chưa gán thì nói thẳng là chưa gán. */
+function mpTenXuongNgan(ma){
+  const m = String(ma || '').trim();
+  return m || '(chưa gán xưởng)';
+}
 /* Các mục cho ô chọn xưởng trong hồ sơ tài khoản.
    Chưa gán thì CHỌN SẴN gợi ý theo đuôi tên, kèm chữ "(gợi ý)" để người
    dùng biết đó là máy đoán và phải bấm Lưu mới thành thật. */
